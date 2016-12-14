@@ -77,6 +77,9 @@ type HostTrackingInfo struct {
 
 type HostTracker map[base.HostId]HostTrackingInfo
 
+func (h *HostTracker) Init() {
+	(*h) = make(map[base.HostId]HostTrackingInfo)
+}
 
 func (h *HostTracker) Update(hostId base.HostId, checkin time.Time) {
 	TrackerLogger.Infof("Checking in host %s at %s", hostId, checkin.Format(time.RFC3339Nano))
@@ -106,9 +109,9 @@ func (h *HostTracker) Get(hostId base.HostId) (HostTrackingInfo, error) {
 }
 
 func (h *HostTracker) Remove(hostId base.HostId) {
-	TrackerLogger.Infof("Removeing host %s from HostTracker", hostId)
-	hostTrackerMutex.Lock()
-	defer hostTrackerMutex.Unlock()
+	TrackerLogger.Infof("Removing host %s from HostTracker", hostId)
+	//hostTrackerMutex.Lock()
+	//defer hostTrackerMutex.Unlock()
 	delete(*h, hostId)
 }
 
@@ -168,8 +171,9 @@ func (h *HostCrashHandler) spawnHost(hostId base.HostId) {
 	defer hostCrashHandlerMutex.Unlock()
 	if _, exists := (*h)[hostId]; !exists {
 		now := time.Now().UTC()
-		TrackerLogger.Warnf("Triggered Host spawn to replace host '%s' at '%s'", hostId, now)
+		TrackerLogger.Warnf("Triggered Host spawn to replace host '%s' at '%s'", hostId, now.Format(time.RFC3339Nano))
 		newId := cloud.CurrentProvider.SpawnInstanceLike(hostId)
+		TrackerLogger.Warnf("Got replacement host %s for old host %s", newId, hostId)
 		(*h)[hostId] = HostSpawn{OldHostId: hostId, NewHostId: newId, InitiatedTime: now, Status: HOST_STATUS_SPAWN_TRIGGERED}
 	}
 }

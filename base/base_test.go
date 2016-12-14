@@ -204,3 +204,45 @@ func TestNeeds_GetDaySwitches(t *testing.T) {
 		t.Error(weekly.Get(time.Saturday, 1380))
 	}
 }
+
+func TestWeekdayBasedDeploymentCount(t *testing.T) {
+	weekly := WeekdayBasedDeploymentCount{}
+	weekly.SetFlat(1)
+	weekly.Set(time.Monday, 1410, 5)
+	weekly.Set(time.Tuesday, 0, 2)
+
+	if weekly.Get(time.Tuesday, 0) != 5 {
+		t.Error(weekly.Get(time.Tuesday, 0))
+	}
+	if weekly.Get(time.Tuesday, MINUTES_DELTA) != 2 {
+		t.Error(weekly.Get(time.Tuesday, MINUTES_DELTA))
+	}
+	if weekly.Get(time.Tuesday, 2 * MINUTES_DELTA) != 2 {
+		t.Error(weekly.Get(time.Tuesday, 2 * MINUTES_DELTA))
+	}
+	if weekly.Get(time.Tuesday, 20 * MINUTES_DELTA) != 1 {
+		t.Error(weekly.Get(time.Tuesday, 20 * MINUTES_DELTA))
+	}
+	weekly.Set(time.Monday, 1410, 100)
+	if weekly.Get(time.Monday, 1425) != 100 {
+		t.Error(weekly.Get(time.Tuesday, (24 * 60) - MINUTES_DELTA))
+	}
+
+	weekly.SetFlat(1)
+	weekly.Set(time.Sunday, 1425, 20)
+	if weekly.Get(time.Sunday, 1440) != 20 {
+		t.Error(weekly.Get(time.Sunday, 1440))
+	}
+	if weekly.Get(time.Sunday, 1410) != 20 {
+		t.Error(weekly.Get(time.Sunday, 1410))
+	}
+	if weekly.Get(time.Monday, 0) != 20 {
+		t.Error(weekly.Get(time.Monday, 0))
+	}
+	if weekly.Get(time.Monday, 15) != 20 {
+		t.Error(weekly.Get(time.Monday, 15))
+	}
+	if weekly.Get(time.Monday, 30) != 1 {
+		t.Error(weekly.Get(time.Monday, 30))
+	}
+}

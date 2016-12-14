@@ -147,6 +147,51 @@ func TestPlannerQueue_RemoveApp(t *testing.T) {
 	}
 }
 
+
+func TestPlannerQueue_RollbackApp(t *testing.T) {
+	queue := NewPlannerQueue()
+	queue.Add("host1", "app1", state_cloud.AppsVersion{1, 1})
+	queue.Add("host1", "app2", state_cloud.AppsVersion{3, 1})
+	queue.Add("host2", "app1", state_cloud.AppsVersion{2, 1})
+	queue.Add("host2", "app2", state_cloud.AppsVersion{3, 1})
+	queue.Add("host3", "app1", state_cloud.AppsVersion{1, 1})
+
+	h1, _ := queue.Get("host1")
+	if len(h1) != 2 {
+		t.Error(h1)
+	}
+	if h1["app1"].Version.Version != 1 {
+		t.Error(h1)
+	}
+	h2, _ := queue.Get("host2")
+	if len(h2) != 2 {
+		t.Error(h2)
+	}
+	if h2["app1"].Version.Version != 2 {
+		t.Error(h2)
+	}
+	h3, _ := queue.Get("host3")
+	if len(h3) != 1 {
+		t.Error(h3)
+	}
+
+	queue.RollbackApp("app1", 3, 1)
+
+	h11, _ := queue.Get("host1")
+	if len(h11) != 2 || h11["app1"].Version.Version != 1 {
+		t.Error(h11)
+	}
+	h22, _ := queue.Get("host2")
+	if len(h22) != 2 {
+		t.Error(h22)
+	}
+	h33, _ := queue.Get("host3")
+	if len(h33) != 1 || h33["app1"].Version.Version != 1 {
+		t.Error(h33)
+	}
+}
+
+
 func TestPlannerQueue_PopSuccessFailState(t *testing.T) {
 	queue := NewPlannerQueue()
 

@@ -262,7 +262,7 @@ func handleRollback(hostId base.HostId, appName base.AppName, failedVersion base
 
 func handleFatalUpdate(hostId base.HostId, appName base.AppName, version base.Version, deploymentCount base.DeploymentCount) {
 	tracker.GlobalAppsStatusTracker.Update(hostId, appName, version, tracker.APP_EVENT_CRASH)
-	planner.Queue.Remove(hostId, appName)
+	planner.Queue.RollbackApp(appName, version, tracker.GlobalAppsStatusTracker.LastStable(appName))
 	planner.Queue.Add(hostId, appName, state_cloud.AppsVersion{DeploymentCount: deploymentCount, Version: tracker.GlobalAppsStatusTracker.LastStable(appName)})
 }
 

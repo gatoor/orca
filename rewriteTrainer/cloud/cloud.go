@@ -127,28 +127,22 @@ func (a *TestProvider) GetResources(ty base.InstanceType) base.InstanceResources
 
 func (a *TestProvider) SpawnInstance(ty base.InstanceType) base.HostId {
 	AWSLogger.Infof("Trying to spawn a single instance of type '%s'", ty)
-	AWSLogger.Errorf("NOT IMPLEMENTED")
-	AWSLogger.Errorf("NOT IMPLEMENTED")
-	AWSLogger.Errorf("NOT IMPLEMENTED")
+	AWSLogger.Errorf("NOT IMPLEMENTED TEST CLOUD PROVIDER SpawnInstance")
 	a.SpawnList = append(a.SpawnList, base.HostId(string(ty)))
 	return "TODO"
 }
 
 func (a *TestProvider) GetSpawnLog() []base.HostId{
-	AWSLogger.Errorf("NOT IMPLEMENTED")
-	AWSLogger.Errorf("NOT IMPLEMENTED")
-	AWSLogger.Errorf("NOT IMPLEMENTED")
+	AWSLogger.Errorf("NOT IMPLEMENTED TEST CLOUD PROVIDER GetSpawnLog")
 	return a.SpawnList
 }
 
 func (a *TestProvider) RemoveFromSpawnLog(base.HostId) {
-	AWSLogger.Errorf("NOT IMPLEMENTED")
-	AWSLogger.Errorf("NOT IMPLEMENTED")
-	AWSLogger.Errorf("NOT IMPLEMENTED")
+	AWSLogger.Errorf("NOT IMPLEMENTED TEST CLOUD PROVIDER RemoveFromSpawnLog")
 }
 
 func (a *TestProvider) TerminateInstance(hostId base.HostId) bool{
-	AWSLogger.Errorf("NOT IMPLEMENTED TerminateInstance")
+	AWSLogger.Errorf("NOT IMPLEMENTED TEST CLOUD PROVIDER TerminateInstance")
 	a.KillList = append(a.KillList, hostId)
 	return true
 }
@@ -159,25 +153,19 @@ func (a *TestProvider) GetInstanceType(hostId base.HostId) base.InstanceType{
 
 func (a *TestProvider) SpawnInstanceSync(ty base.InstanceType) base.HostId {
 	AWSLogger.Infof("Trying to spawn a single instance of type '%s'", ty)
-	AWSLogger.Errorf("NOT IMPLEMENTED")
-	AWSLogger.Errorf("NOT IMPLEMENTED")
-	AWSLogger.Errorf("NOT IMPLEMENTED")
+	AWSLogger.Errorf("NOT IMPLEMENTED TEST CLOUD PROVIDER SpawnInstanceSync")
 	return ""
 }
 
 func (a *TestProvider) SpawnInstanceLike(hostId base.HostId) base.HostId{
-	AWSLogger.Errorf("NOT IMPLEMENTED")
-	AWSLogger.Errorf("NOT IMPLEMENTED")
-	AWSLogger.Errorf("NOT IMPLEMENTED")
+	AWSLogger.Errorf("NOT IMPLEMENTED TEST CLOUD PROVIDER SpawnInstanceLike")
 	//a.SpawnList = append(a.SpawnList, "new_" + hostId)
 	return "new_" + hostId
 }
 
 func (a *TestProvider) SpawnInstances(tys []base.InstanceType) bool{
 	AWSLogger.Infof("Trying to spawn %d instances", len(tys))
-	AWSLogger.Errorf("NOT IMPLEMENTED")
-	AWSLogger.Errorf("NOT IMPLEMENTED")
-	AWSLogger.Errorf("NOT IMPLEMENTED")
+	AWSLogger.Errorf("NOT IMPLEMENTED TEST CLOUD PROVIDER SpawnInstances")
 	return true
 }
 

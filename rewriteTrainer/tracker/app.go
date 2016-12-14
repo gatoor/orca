@@ -66,7 +66,11 @@ const (
 	RATING_CRASHED = "RATING_CRASHED"
 )
 
-func (a *AppsStatusTracker) GetRating(app base.AppName, version base.Version) (VersionRating, error){
+func (a *AppsStatusTracker) Init() {
+	(*a) = make(map[base.AppName]map[base.Version]AppTrack)
+}
+
+func (a *AppsStatusTracker) GetRating(app base.AppName, version base.Version) (VersionRating, error) {
 	appsTrackerMutex.Lock()
 	defer appsTrackerMutex.Unlock()
 	if elem, exists := (*a)[app]; exists {
@@ -75,6 +79,17 @@ func (a *AppsStatusTracker) GetRating(app base.AppName, version base.Version) (V
 		}
 	}
 	return "", errors.New("App does not exist")
+}
+
+func (a *AppsStatusTracker) Get(app base.AppName, version base.Version) (AppTrack, error) {
+	appsTrackerMutex.Lock()
+	defer appsTrackerMutex.Unlock()
+	if elem, exists := (*a)[app]; exists {
+		if e, ex := elem[version]; ex {
+			return e, nil
+		}
+	}
+	return AppTrack{}, errors.New("App does not exist")
 }
 
 func (a *AppsStatusTracker) Update(hostId base.HostId, app base.AppName, version base.Version, event string) {

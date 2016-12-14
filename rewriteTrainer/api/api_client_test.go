@@ -25,6 +25,7 @@ import (
 	"net/http/httptest"
 	"gatoor/orca/base"
 	"bytes"
+	"time"
 	"encoding/json"
 	"gatoor/orca/rewriteTrainer/state/configuration"
 	"gatoor/orca/rewriteTrainer/state/cloud"
@@ -34,22 +35,22 @@ import (
 	"gatoor/orca/rewriteTrainer/needs"
 	"gatoor/orca/rewriteTrainer/planner"
 	"gatoor/orca/rewriteTrainer/scheduler"
+	"gatoor/orca/rewriteTrainer/tracker"
+	"fmt"
 )
 
 func initTrainer() {
 	state_configuration.GlobalConfigurationState.Init()
 	state_cloud.GlobalCloudLayout.Init()
 	state_needs.GlobalAppsNeedState = state_needs.AppsNeedState{}
-
-
-
+	tracker.GlobalAppsStatusTracker.Init()
+	tracker.GlobalHostTracker.Init()
+	planner.Queue = *planner.NewPlannerQueue()
 	state_configuration.GlobalConfigurationState.CloudProvider.Type = "TEST"
 	state_configuration.GlobalConfigurationState.CloudProvider.BaseInstanceType = "testtype"
 	state_configuration.GlobalConfigurationState.CloudProvider.MinInstances = 2
 	state_configuration.GlobalConfigurationState.CloudProvider.MaxInstances = 4
-
 	cloud.Init()
-
 	db.Init("")
 
 	state_configuration.GlobalConfigurationState.Trainer.Ip = "0.0.0.0"
@@ -156,9 +157,9 @@ func setup(t *testing.T) (base.TrainerPushWrapper, base.TrainerPushWrapper){
 	var respObj2 = base.PushConfiguration{}
 	json.Unmarshal(response2.Body.Bytes(), &respObj2)
 
-	if respObj2.AppConfiguration.Name != "" {
-		t.Errorf("%+v", respObj2)
-	}
+	//if respObj2.AppConfiguration.Name != "" {
+	//	t.Errorf("%+v", respObj2)
+	//}
 
 	planner.InitialPlan()
 	scheduler.TriggerRun()
@@ -275,9 +276,15 @@ func Test_AllOk(t *testing.T) {
 		t.Errorf("queue: %+v", planner.Queue.Queue)
 		t.Errorf("response: %+v", respObj9)
 	}
+	db.Close()
 }
 
 func Test_UpdateScaleApp(t *testing.T) {
+	state_cloud.GlobalCloudLayout.Init()
+	fmt.Println("<<<<<<<")
+	fmt.Println(state_cloud.GlobalCloudLayout)
+	fmt.Println("<<<<<<<")
+
 	clientObj, clientObj2 := setup(t)
 	getToStableState(clientObj, clientObj2, t)
 
@@ -413,9 +420,259 @@ func Test_UpdateScaleApp(t *testing.T) {
 		t.Errorf("%+v", state_cloud.GlobalCloudLayout.Desired)
 		t.Error(responseObj7)
 	}
+	db.Close()
 }
 
 
 func Test_HostDies(t *testing.T) {
+	clientObj, clientObj2 := setup(t)
+	getToStableState(clientObj, clientObj2, t)
 
+	tracker.GlobalHostTracker.Update("host2", time.Now().UTC().Add(-time.Duration(time.Minute * 55)))
+
+	tracker.GlobalHostTracker.CheckCheckinTimeout()
+
+	state_configuration.GlobalConfigurationState.ConfigureApp(base.AppConfiguration{
+		Name: "worker2",
+		Type: base.APP_WORKER,
+		Version: 1,
+		TargetDeploymentCount: 4,
+		MinDeploymentCount: 4,
+		DockerConfig: base.DockerConfig{},
+		RawConfig: base.RawConfig{},
+		LoadBalancer: "",
+		Network: "network2",
+	})
+
+	clientObjNew := base.TrainerPushWrapper{
+		HostInfo: base.HostInfo{
+			HostId: "new_host2",
+			IpAddr: "1.2.3.6",
+			OsInfo: base.OsInfo{},
+			Apps: []base.AppInfo{
+			},
+		},
+		Stats: base.MetricsWrapper{},
+	}
+
+	clientPush(clientObjNew)
+
+	scheduler.TriggerRun()
+
+	responseNew := clientPush(clientObjNew)
+	var responseObjNew = base.PushConfiguration{}
+	json.Unmarshal(responseNew.Body.Bytes(), &responseObjNew)
+
+	if responseObjNew.DeploymentCount != 1 || responseObjNew.AppConfiguration.Version != 1 || responseObjNew.AppConfiguration.Name != "http2" {
+		t.Errorf("%+v", state_cloud.GlobalCloudLayout.Desired)
+		t.Error(responseObjNew)
+	}
+
+	clientObjNew.HostInfo.Apps = []base.AppInfo{{Type: base.APP_HTTP, Name: "http2", Version: 1, Status: base.STATUS_RUNNING, Id: "http2_111"}}
+
+
+	responseNew2 := clientPush(clientObjNew)
+	var responseObjNew2 = base.PushConfiguration{}
+	json.Unmarshal(responseNew2.Body.Bytes(), &responseObjNew2)
+
+	if responseObjNew2.DeploymentCount != 2 || responseObjNew2.AppConfiguration.Version != 1 || responseObjNew2.AppConfiguration.Name != "worker2" {
+		t.Errorf("%+v", state_cloud.GlobalCloudLayout.Desired)
+		t.Error(responseObjNew2)
+	}
+	db.Close()
+}
+
+//just resend the config
+func Test_ScaleFail(t *testing.T) {
+	clientObj, clientObj2 := setup(t)
+	getToStableState(clientObj, clientObj2, t)
+
+	//scale down
+	state_configuration.GlobalConfigurationState.ConfigureApp(base.AppConfiguration{
+		Name: "worker2",
+		Type: base.APP_WORKER,
+		Version: 1,
+		TargetDeploymentCount: 4,
+		MinDeploymentCount: 4,
+		DockerConfig: base.DockerConfig{},
+		RawConfig: base.RawConfig{},
+		LoadBalancer: "",
+		Network: "network2",
+	})
+
+	scheduler.TriggerRun()
+
+	clientObj2.HostInfo.Apps = []base.AppInfo{{Type: base.APP_HTTP, Name: "http2", Version: 1, Status: base.STATUS_RUNNING, Id: "http2_11"}, {Type: base.APP_WORKER, Name: "worker2", Version: 1, Status: base.STATUS_RUNNING, Id: "worker2_11"}, {Type: base.APP_WORKER, Name: "worker2", Version: 1, Status: base.STATUS_RUNNING, Id: "worker2_22"}, {Type: base.APP_WORKER, Name: "worker2", Version: 1, Status: base.STATUS_RUNNING, Id: "worker2_33"}, {Type: base.APP_WORKER, Name: "worker2", Version: 1, Status: base.STATUS_RUNNING, Id: "worker2_44"}, {Type: base.APP_WORKER, Name: "worker2", Version: 1, Status: base.STATUS_RUNNING, Id: "worker2_55"}, {Type: base.APP_WORKER, Name: "worker2", Version: 1, Status: base.STATUS_RUNNING, Id: "worker2_66"}, {Type: base.APP_WORKER, Name: "worker2", Version: 1, Status: base.STATUS_RUNNING, Id: "worker2_77"}, {Type: base.APP_WORKER, Name: "worker2", Version: 1, Status: base.STATUS_RUNNING, Id: "worker2_88"}}
+
+	responseScaleDown := clientPush(clientObj2)
+	var responseObjScaleDown = base.PushConfiguration{}
+	json.Unmarshal(responseScaleDown.Body.Bytes(), &responseObjScaleDown)
+
+	if responseObjScaleDown.DeploymentCount != 2 || responseObjScaleDown.AppConfiguration.Name != "worker2" {
+		t.Error(responseObjScaleDown)
+	}
+
+	scheduler.TriggerRun()
+
+	responseScaleDown2 := clientPush(clientObj2)
+	var responseObjScaleDown2 = base.PushConfiguration{}
+	json.Unmarshal(responseScaleDown2.Body.Bytes(), &responseObjScaleDown2)
+
+	if responseObjScaleDown2.DeploymentCount != 2 || responseObjScaleDown2.AppConfiguration.Name != "worker2" {
+		t.Error(responseObjScaleDown2)
+	}
+
+	scheduler.TriggerRun()
+
+	responseScaleDown3 := clientPush(clientObj2)
+	var responseObjScaleDown3 = base.PushConfiguration{}
+	json.Unmarshal(responseScaleDown3.Body.Bytes(), &responseObjScaleDown3)
+
+	if responseObjScaleDown3.DeploymentCount != 2 || responseObjScaleDown3.AppConfiguration.Name != "worker2" {
+		t.Error(responseObjScaleDown3)
+	}
+
+	clientObj2.HostInfo.Apps = []base.AppInfo{{Type: base.APP_HTTP, Name: "http2", Version: 1, Status: base.STATUS_RUNNING, Id: "http2_11"}, {Type: base.APP_WORKER, Name: "worker2", Version: 1, Status: base.STATUS_RUNNING, Id: "worker2_11"}, {Type: base.APP_WORKER, Name: "worker2", Version: 1, Status: base.STATUS_RUNNING, Id: "worker2_22"}}
+	clientPush(clientObj2)
+
+	//scale up
+	state_configuration.GlobalConfigurationState.ConfigureApp(base.AppConfiguration{
+		Name: "worker2",
+		Type: base.APP_WORKER,
+		Version: 1,
+		TargetDeploymentCount: 20,
+		MinDeploymentCount: 4,
+		DockerConfig: base.DockerConfig{},
+		RawConfig: base.RawConfig{},
+		LoadBalancer: "",
+		Network: "network2",
+	})
+
+	scheduler.TriggerRun()
+
+	clientObj2.HostInfo.Apps = []base.AppInfo{{Type: base.APP_HTTP, Name: "http2", Version: 1, Status: base.STATUS_RUNNING, Id: "http2_11"}, {Type: base.APP_WORKER, Name: "worker2", Version: 1, Status: base.STATUS_RUNNING, Id: "worker2_11"}, {Type: base.APP_WORKER, Name: "worker2", Version: 1, Status: base.STATUS_RUNNING, Id: "worker2_22"}, {Type: base.APP_WORKER, Name: "worker2", Version: 1, Status: base.STATUS_RUNNING, Id: "worker2_33"}, {Type: base.APP_WORKER, Name: "worker2", Version: 1, Status: base.STATUS_RUNNING, Id: "worker2_44"}, {Type: base.APP_WORKER, Name: "worker2", Version: 1, Status: base.STATUS_RUNNING, Id: "worker2_55"}, {Type: base.APP_WORKER, Name: "worker2", Version: 1, Status: base.STATUS_RUNNING, Id: "worker2_66"}, {Type: base.APP_WORKER, Name: "worker2", Version: 1, Status: base.STATUS_RUNNING, Id: "worker2_77"}, {Type: base.APP_WORKER, Name: "worker2", Version: 1, Status: base.STATUS_RUNNING, Id: "worker2_88"}}
+
+	responseScaleDown4 := clientPush(clientObj2)
+	var responseObjScaleDown4 = base.PushConfiguration{}
+	json.Unmarshal(responseScaleDown4.Body.Bytes(), &responseObjScaleDown4)
+
+	if responseObjScaleDown4.DeploymentCount != 9 || responseObjScaleDown4.AppConfiguration.Name != "worker2" {
+		t.Error(responseObjScaleDown4)
+	}
+
+	scheduler.TriggerRun()
+
+	responseScaleDown5 := clientPush(clientObj2)
+	var responseObjScaleDown5 = base.PushConfiguration{}
+	json.Unmarshal(responseScaleDown5.Body.Bytes(), &responseObjScaleDown5)
+
+	if responseObjScaleDown5.DeploymentCount != 9 || responseObjScaleDown5.AppConfiguration.Name != "worker2" {
+		t.Error(responseObjScaleDown5)
+	}
+
+	scheduler.TriggerRun()
+
+	responseScaleDown6 := clientPush(clientObj2)
+	var responseObjScaleDown6 = base.PushConfiguration{}
+	json.Unmarshal(responseScaleDown6.Body.Bytes(), &responseObjScaleDown6)
+
+	if responseObjScaleDown6.DeploymentCount != 9 || responseObjScaleDown6.AppConfiguration.Name != "worker2" {
+		t.Error(responseObjScaleDown6)
+	}
+	db.Close()
+}
+
+
+func Test_RollbackCancelUpdatesOnOtherHosts(t *testing.T) {
+	clientObj, clientObj2 := setup(t)
+	getToStableState(clientObj, clientObj2, t)
+
+	//http1 update and scale up
+	state_configuration.GlobalConfigurationState.ConfigureApp(base.AppConfiguration{
+		Name: "http1",
+		Type: base.APP_HTTP,
+		Version: 2,
+		TargetDeploymentCount: 2,
+		MinDeploymentCount: 1,
+		DockerConfig: base.DockerConfig{},
+		RawConfig: base.RawConfig{},
+		LoadBalancer: "loadbalancer1",
+		Network: "network1",
+	})
+
+	scheduler.TriggerRun()
+
+
+	clientPush(clientObj) //checkin once so the state is set to APPLYING
+	res, _ := planner.Queue.Get("host1")
+
+	if len(res) != 1 || res["http1"].State != planner.STATE_APPLYING {
+		t.Error(res)
+	}
+
+	clientObj.HostInfo.Apps = []base.AppInfo{{Type: base.APP_HTTP, Name: "http1", Version: 2, Status: base.STATUS_DEAD, Id: "http1_1"},{Type: base.APP_HTTP, Name: "http2", Version: 1, Status: base.STATUS_RUNNING, Id: "http2_1"},{Type: base.APP_HTTP, Name: "worker1", Version: 1, Status: base.STATUS_RUNNING, Id: "worker1_1"},{Type: base.APP_WORKER, Name: "worker2", Version: 1, Status: base.STATUS_RUNNING, Id: "worker2_1"}, {Type: base.APP_WORKER, Name: "worker2", Version: 1, Status: base.STATUS_RUNNING, Id: "worker2_2"}}
+	responseNew := clientPush(clientObj)
+	var responseObjNew = base.PushConfiguration{}
+	json.Unmarshal(responseNew.Body.Bytes(), &responseObjNew)
+
+	//rollback initiated on host1
+	if responseObjNew.DeploymentCount != 1 || responseObjNew.AppConfiguration.Version != 1 || responseObjNew.AppConfiguration.Name != "http1" {
+		t.Errorf("%+v", state_cloud.GlobalCloudLayout.Desired)
+		t.Error(responseObjNew)
+	}
+
+	//cancel update on host2, aka
+	res2, _ := planner.Queue.Get("host2")
+
+	if len(res2) != 1 || res2["http1"].State != planner.STATE_QUEUED{
+		t.Error(res2)
+	}
+	db.Close()
+}
+
+func Test_AppDiedTracking (t *testing.T) {
+	clientObj, clientObj2 := setup(t)
+	getToStableState(clientObj, clientObj2, t)
+
+	clientObj.HostInfo.Apps = []base.AppInfo{{Type: base.APP_HTTP, Name: "http1", Version: 2, Status: base.STATUS_RUNNING, Id: "http1_1"},{Type: base.APP_HTTP, Name: "http2", Version: 1, Status: base.STATUS_RUNNING, Id: "http2_1"},{Type: base.APP_HTTP, Name: "worker1", Version: 1, Status: base.STATUS_RUNNING, Id: "worker1_1"},{Type: base.APP_WORKER, Name: "worker2", Version: 1, Status: base.STATUS_RUNNING, Id: "worker2_1"}, {Type: base.APP_WORKER, Name: "worker2", Version: 1, Status: base.STATUS_RUNNING, Id: "worker2_2"}}
+	clientPush(clientObj)
+
+	rating, _ := tracker.GlobalAppsStatusTracker.GetRating("http1", 2)
+	if rating != tracker.RATING_STABLE {
+		t.Error(rating)
+	}
+	ratingDetails, _ := tracker.GlobalAppsStatusTracker.Get("http1", 2)
+	if ratingDetails.RunningCount != 1 {
+		t.Error(ratingDetails)
+	}
+
+	clientPush(clientObj)
+	clientPush(clientObj)
+	clientPush(clientObj)
+	clientPush(clientObj)
+	ratingDetails2, _ := tracker.GlobalAppsStatusTracker.Get("http1", 2)
+	if ratingDetails2.RunningCount != 5  || ratingDetails2.Rating != tracker.RATING_STABLE {
+		t.Error(ratingDetails2)
+	}
+
+	lastStable := tracker.GlobalAppsStatusTracker.LastStable("http1")
+
+	if lastStable != 2 {
+		t.Error(lastStable)
+	}
+
+	clientObj.HostInfo.Apps = []base.AppInfo{{Type: base.APP_HTTP, Name: "http1", Version: 2, Status: base.STATUS_DEAD, Id: "http1_1"},{Type: base.APP_HTTP, Name: "http2", Version: 1, Status: base.STATUS_RUNNING, Id: "http2_1"},{Type: base.APP_HTTP, Name: "worker1", Version: 1, Status: base.STATUS_RUNNING, Id: "worker1_1"},{Type: base.APP_WORKER, Name: "worker2", Version: 1, Status: base.STATUS_RUNNING, Id: "worker2_1"}, {Type: base.APP_WORKER, Name: "worker2", Version: 1, Status: base.STATUS_RUNNING, Id: "worker2_2"}}
+	clientPush(clientObj)
+
+	ratingDetails3, _ := tracker.GlobalAppsStatusTracker.Get("http1", 2)
+	if ratingDetails3.RunningCount != 5  || ratingDetails3.Rating != tracker.RATING_CRASHED {
+		t.Error(ratingDetails3)
+	}
+
+	lastStable2 := tracker.GlobalAppsStatusTracker.LastStable("http1")
+
+	if lastStable2 != 1 {
+		t.Error(lastStable2)
+	}
+	db.Close()
 }

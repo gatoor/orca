@@ -186,6 +186,22 @@ func (p PlannerQueue) RemoveApp(appName base.AppName, version base.Version) {
 }
 
 
+func (p PlannerQueue) RollbackApp(appName base.AppName, version base.Version, stableVersion base.Version) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	for host, apps:= range p.Queue {
+		for appN, appObj := range apps {
+			if appN == appName && version == appObj.Version.Version {
+				appObj.Version.Version = stableVersion
+				QueueLogger.Infof("Rollback %s:%d to %d on host '%s'", appN, version, stableVersion, host)
+				apps[appN] = appObj
+			}
+
+		}
+	}
+}
+
+
 func (p PlannerQueue) SetState(hostId base.HostId, appName base.AppName, state UpdateState) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
