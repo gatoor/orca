@@ -175,11 +175,13 @@ func (c *Client) AppMetrics(appId base.AppId, appConf base.AppConfiguration, app
 		}
 		resultStats = append(resultStats, stats)
 	}
-	err := <-errC
-	if err != nil || len(resultStats) != 2 {
-		DockerLogger.Infof("Getting AppMetrics for app %s %s:%d failed: %s. Only %d results", appId, appConf.Name, appConf.Version, err, len(resultStats))
-		return false
-	}
+	//err := <-errC
+	DockerLogger.Infof("%+v", resultStats)
+
+	//if (err != nil){
+	//	DockerLogger.Infof("Getting AppMetrics for app %s %s:%d failed: %s. Only %d results", appId, appConf.Name, appConf.Version, err, len(resultStats))
+	//	return false
+	//}
 	appMet := parseDockerStats(resultStats[0], resultStats[1])
 	//TODO test performance of app and add this to appMet.ResponsePerformance
 	DockerLogger.Infof("PRE PARSE: %+v", resultStats[0])

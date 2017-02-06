@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"gatoor/orca/rewriteTrainer/state/needs"
 	"gatoor/orca/rewriteTrainer/state/configuration"
+	"gatoor/orca/rewriteTrainer/db"
 )
 
 var SchedulerLogger = Logger.LoggerWithField(Logger.Logger, "module", "scheduler")
@@ -129,4 +130,52 @@ func run() {
 
 	fmt.Println(".........")
 	SchedulerLogger.Info("Finished run()")
+
+	/* Collect some statistics on whats running and whats desired */
+	for appName, app := range state_configuration.GlobalConfigurationState.AllAppsLatest() {
+		count_snapshot := db.ApplicationCountStatistic{}
+		current_state := state_cloud.GlobalCloudLayout.Snapshot()
+
+		running_count, _ :=current_state.Current.DeploymentCount(appName, app.Version)
+		desired_count, _ :=current_state.Current.DeploymentCount(appName, app.Version)
+
+		count_snapshot.AppName = appName
+		count_snapshot.Running = running_count
+		count_snapshot.Desired = desired_count
+		count_snapshot.Timestamp = time.Now()
+
+		db.Audit.Insert__ApplicationCountStatistic(count_snapshot)
+	}
+
+	/* Collect performance metrics on each application. Sadly this must be done this way otherwise we end up with no data
+	gaps, which is not strictly correct */
+	for targetAppName, _ := range state_configuration.GlobalConfigurationState.AllAppsLatest() {
+		statistic := db.ApplicationUtilisationStatistic{}
+		statistic.AppName = targetAppName
+		statistic.Timestamp = time.Now()
+
+		current_state := state_cloud.GlobalCloudLayout.Snapshot()
+		for _, layoutElem := range current_state.Current.Layout {
+			for appName, application := range layoutElem.Apps {
+				SchedulerLogger.Info("FOUND APPLICATION...")
+
+				if appName == targetAppName {
+					SchedulerLogger.Info("FOUND APPLICATION we were looking for")
+
+					minute_threshold := time.Now().Unix() - 120
+					SchedulerLogger.Info("It had a stats from %s with %+v", application.StatisticPointTimestamp.Unix(), application.StatisticPoint)
+
+					if application.StatisticPointTimestamp.Unix() > minute_threshold {
+						SchedulerLogger.Info("We have had a datapoint in the last 120 seconds")
+						statistic.Cpu += application.StatisticPoint.CpuUsage
+						statistic.Mbytes += application.StatisticPoint.MemoryUsage
+						statistic.Network += application.StatisticPoint.NetworkUsage
+					}
+				}
+			}
+		}
+
+		db.Audit.Insert__ApplicationUtilisationStatistic(statistic)
+	}
+
 }

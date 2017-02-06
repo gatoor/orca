@@ -32,8 +32,8 @@ import (
 	"fmt"
 	"gatoor/orca/rewriteTrainer/state/configuration"
 	"os"
-	"gatoor/orca/rewriteTrainer/audit"
 	"github.com/aws/aws-sdk-go/service/elb"
+	"gatoor/orca/rewriteTrainer/db"
 )
 
 var AWSLogger = Logger.LoggerWithField(Logger.Logger, "module", "aws")
@@ -119,11 +119,11 @@ func (a *AWSProvider) Init() {
 }
 
 func (a *AWSProvider) SpawnInstance(ty base.InstanceType) base.HostId {
-	audit.Audit.AddEvent(map[string]string{
+	db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 		"message": fmt.Sprintf("Trying to spawn a single instance of type '%s' in region %s with AMI %s", ty, a.ProviderConfiguration.AWSConfiguration.Region, a.ProviderConfiguration.AWSConfiguration.AMI),
 		"subsystem": "cloud.aws",
 		"level": "info",
-	})
+	}})
 
 	svc := ec2.New(session.New(&aws.Config{Region: aws.String(a.ProviderConfiguration.AWSConfiguration.Region)}))
 
@@ -137,21 +137,21 @@ func (a *AWSProvider) SpawnInstance(ty base.InstanceType) base.HostId {
 	})
 
 	if err != nil {
-		audit.Audit.AddEvent(map[string]string{
+		db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 			"message": fmt.Sprintf("Could not spawn instance of type %s: %s", ty, err),
 			"subsystem": "cloud.aws",
 			"level": "error",
-		})
+		}})
 
 		return ""
 	}
 
 	id := base.HostId(*runResult.Instances[0].InstanceId)
-	audit.Audit.AddEvent(map[string]string{
+	db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 		"message": fmt.Sprintf("Spawned a single instance of type '%s'. Id=%s", ty, id),
 		"subsystem": "cloud.aws",
 		"level": "info",
-	})
+	}})
 	a.SpawnLog.Add(id)
 
 	return id
@@ -208,20 +208,20 @@ func (a *AWSProvider) UpdateLoadBalancers(hostId base.HostId, app base.AppName, 
 			}
 			_, err := svc.DeregisterInstancesFromLoadBalancer(params)
 			if err != nil {
-				audit.Audit.AddEvent(map[string]string{
+				db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 					"message": fmt.Sprintf("Could not deregister instance %s from elb %s. Reason was %s", hostId, app_configuration.LoadBalancer, err.Error()),
 					"subsystem": "cloud.aws",
 					"level": "error",
-				})
+				}})
 
 				return
 			}
 
-			audit.Audit.AddEvent(map[string]string{
+			db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 				"message": fmt.Sprintf("Deregistered instance %s from elb %s", hostId, app_configuration.LoadBalancer),
 				"subsystem": "cloud.aws",
 				"level": "info",
-			})
+			}})
 
 		} else if event == base.STATUS_RUNNING {
 			svc := elb.New(session.New(&aws.Config{Region: aws.String(a.ProviderConfiguration.AWSConfiguration.Region)}))
@@ -236,20 +236,20 @@ func (a *AWSProvider) UpdateLoadBalancers(hostId base.HostId, app base.AppName, 
 			}
 			_, err := svc.RegisterInstancesWithLoadBalancer(params)
 			if err != nil {
-				audit.Audit.AddEvent(map[string]string{
+				db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 					"message": fmt.Sprintf("Error linking instance %s from elb %s. Reason was %s", hostId, app_configuration.LoadBalancer, err.Error()),
 					"subsystem": "cloud.aws",
 					"level": "error",
-				})
+				}})
 
 				return
 			}
 
-			audit.Audit.AddEvent(map[string]string{
+			db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 				"message": fmt.Sprintf("Linked instance %s to elb %s", hostId, app_configuration.LoadBalancer),
 				"subsystem": "cloud.aws",
 				"level": "info",
-			})
+			}})
 		}
 	}
 }
@@ -386,11 +386,11 @@ func (a *AWSProvider) CheckInstance(hostId base.HostId) InstanceStatus {
 }
 
 func (a *AWSProvider) TerminateInstance(hostId base.HostId) bool {
-	audit.Audit.AddEvent(map[string]string{
+	db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 		"message": fmt.Sprintf("Trying to terminate instance %s", hostId),
 		"subsystem": "cloud.aws",
 		"level": "error",
-	})
+	}})
 
 	svc := ec2.New(session.New(&aws.Config{Region: aws.String(a.ProviderConfiguration.AWSConfiguration.Region)}))
 	_, err := svc.TerminateInstances(&ec2.TerminateInstancesInput{
@@ -398,19 +398,19 @@ func (a *AWSProvider) TerminateInstance(hostId base.HostId) bool {
 	})
 
 	if err != nil {
-		audit.Audit.AddEvent(map[string]string{
+		db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 			"message": fmt.Sprintf("Could not terminate instance %s: %s", hostId, err),
 			"subsystem": "cloud.aws",
 			"level": "error",
-		})
+		}})
 
 		return false
 	}
-	audit.Audit.AddEvent(map[string]string{
+	db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 		"message": fmt.Sprintf("Terminated instance %s", hostId),
 		"subsystem": "cloud.aws",
 		"level": "error",
-	})
+	}})
 
 	a.SpawnLog.Remove(hostId)
 	return true

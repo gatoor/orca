@@ -81,7 +81,8 @@ func (h *HostTracker) Init() {
 	(*h) = make(map[base.HostId]HostTrackingInfo)
 }
 
-func (h *HostTracker) Update(hostId base.HostId, checkin time.Time) {
+func (h *HostTracker) Update(hostId base.HostId) {
+	checkin := time.Now()
 	TrackerLogger.Infof("Checking in host %s at %s", hostId, checkin.Format(time.RFC3339Nano))
 	hostTrackerMutex.Lock()
 	defer hostTrackerMutex.Unlock()

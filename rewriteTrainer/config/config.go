@@ -139,6 +139,7 @@ func applyCloudProviderConfiguration(conf base.ProviderConfiguration) {
 	state_configuration.GlobalConfigurationState.CloudProvider.MaxInstances = conf.MaxInstances
 	state_configuration.GlobalConfigurationState.CloudProvider.MinInstances = conf.MinInstances
 	state_configuration.GlobalConfigurationState.CloudProvider.AWSConfiguration = conf.AWSConfiguration
+	state_configuration.GlobalConfigurationState.CloudProvider.BaseInstanceType = conf.BaseInstanceType
 }
 
 func applyAppsConfig(appsConfs []base.AppConfiguration) {

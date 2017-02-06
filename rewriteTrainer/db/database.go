@@ -18,92 +18,248 @@ along with Orca.  If not, see <http://www.gnu.org/licenses/>.
 
 package db
 
-
 import (
-	"github.com/boltdb/bolt"
-	Logger "gatoor/orca/rewriteTrainer/log"
-	"encoding/json"
 	"time"
+	"gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
+	"gatoor/orca/base"
+	"fmt"
 )
-
-var DbLogger = Logger.LoggerWithField(Logger.Logger, "module", "db")
 
 type OrcaDb struct {
-	DbName string
-	Db *bolt.DB
+	session *mgo.Session
+	db      *mgo.Database
 }
-
-const (
-	BUCKET_AUDIT_CURRENT_LAYOUT = "CurrentLayout"
-	BUCKET_AUDIT_DESIRED_LAYOUT = "DesiredLayout"
-	BUCKET_AUDIT_RECEIVED_STATS = "StatsReceived"
-	BUCKET_AUDIT_RECEIVED_HOST_INFO = "HostInfoReceived"
-	BUCKET_AUDIT_SENT = "PushSent"
-
-
-	DB_PATH = "/orca/data/audit.db"
-)
-
 
 var Audit OrcaDb
 
-func Init(postfix string) {
-	audit, err := bolt.Open(DB_PATH + postfix, 0600, nil)
-
+func (a *OrcaDb) Init(hostname string) {
+	session, err := mgo.Dial(hostname)
 	if err != nil {
-		DbLogger.Panicf("Cannot open database %s", DB_PATH)
-	}
-	Audit = OrcaDb{
-		"audit.db" + postfix, audit,
+		panic(err)
 	}
 
-	buckets := []string{BUCKET_AUDIT_RECEIVED_STATS, BUCKET_AUDIT_RECEIVED_HOST_INFO, BUCKET_AUDIT_SENT, BUCKET_AUDIT_DESIRED_LAYOUT, BUCKET_AUDIT_CURRENT_LAYOUT}
+	a.session = session
+	a.db = session.DB("orca")
+}
 
-	for _, bucketName := range buckets {
-		Audit.Db.Update(func(tx *bolt.Tx) error {
-			_, err := tx.CreateBucketIfNotExists([]byte(bucketName))
-			if err != nil {
-				DbLogger.Errorf("Bucket %s could not be created in audit.db", bucketName)
-				return nil
+func (a *OrcaDb) Close() {
+	a.session.Close()
+}
+
+func (a *OrcaDb) Insert__AppMetrics(host base.HostId, stats base.MetricsWrapper, _ string) {
+	c := a.db.C("app_metrics")
+	for appName, obj := range stats.AppMetrics {
+		for appVersion, appMetrics := range obj {
+			for _, metric := range appMetrics {
+				entity := UtilisationStatistic{
+					AppName:appName,
+					AppVersion:appVersion,
+					Cpu:metric.CpuUsage,
+					Mbytes:metric.MemoryUsage,
+					Network:metric.NetworkUsage,
+					Host:host,
+					Timestamp:time.Now(),
+				}
+
+				err := c.Insert(&entity)
+				if err != nil {
+					return
+				}
 			}
-			DbLogger.Infof("Created DB Bucket %s", bucketName)
-			return nil
-		})
+		}
 	}
 }
 
-func Close() {
-	Audit.Db.Close()
-}
-
-func (a OrcaDb) Add(bucket string, key string, obj interface{}){
-	encoded, jerr := json.Marshal(obj)
-	if jerr != nil {
-		DbLogger.Errorf("Failed to json encode '%+v'", obj)
+func (db *OrcaDb) Insert__AuditEvent(event AuditEvent) {
+	event.Timestamp = time.Now()
+	c := db.db.C("audit")
+	err := c.Insert(&event)
+	if err != nil {
 		return
 	}
-
-	err := a.Db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(bucket))
-		err := b.Put([]byte(key), []byte(encoded))
-		return err
-	})
+}
+func (db *OrcaDb) Insert__ApplicationUtilisationStatistic(event ApplicationUtilisationStatistic) {
+	event.Timestamp = time.Now()
+	c := db.db.C("app_utilisation")
+	err := c.Insert(&event)
 	if err != nil {
-		DbLogger.Errorf("Failed to save '%s':'%s' to '%s'", key, encoded, bucket)
+		return
 	}
 }
 
-func (a OrcaDb) Get(bucket string, key string) string {
-	var res []byte
-	a.Db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(bucket))
-		res = b.Get([]byte(key))
-		return nil
-	})
-	return string(res)
+func (db *OrcaDb) Insert__ApplicationCountStatistic(count ApplicationCountStatistic) {
+	c := db.db.C("app_count")
+	err := c.Insert(&count)
+	if err != nil {
+		return
+	}
 }
 
-func GetNow() (string, time.Time) {
-	t := time.Now().UTC()
-	return t.Format(time.RFC3339Nano), t
+func (db *OrcaDb) Query__ApplicationCountStatistic(application base.AppName) []ApplicationCountStatistic {
+	c := db.db.C("app_count")
+	var results []ApplicationCountStatistic
+	err := c.Find(bson.M{"appname": application}).Sort("-Timestamp").All(&results)
+	if err != nil {
+		panic("error querying db")
+	}
+
+	return results
 }
+
+
+func (db *OrcaDb) Query__ApplicationUtilisationStatistic(application base.AppName) []ApplicationUtilisationStatistic {
+	c := db.db.C("app_utilisation")
+	var results []ApplicationUtilisationStatistic
+	err := c.Find(bson.M{"appname": application}).Sort("-Timestamp").All(&results)
+	if err != nil {
+		panic("error querying db")
+	}
+
+	return results
+}
+
+func (db *OrcaDb) Query__AuditEvents(application base.AppName) []AuditEvent {
+	c := db.db.C("audit")
+	var results []AuditEvent
+	if application != "" {
+		err := c.Find(bson.M{"details.application": application}).Sort("-Timestamp").All(&results)
+		if err != nil {
+			panic("error querying db")
+		}
+
+	} else {
+		err := c.Find(nil).Sort("-Timestamp").All(&results)
+		if err != nil {
+			panic("error querying db")
+		}
+	}
+
+	return results
+}
+
+func (a *OrcaDb) Query__AppMetrics_Performance__ByMinute(application base.AppName) []UtilisationStatistic {
+	c := a.db.C("app_metrics")
+
+	var result = make([]UtilisationStatistic, 0)
+	operations := []bson.M{
+		bson.M{
+			"$match" :bson.M{"appname":application},
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id": bson.M{
+					"utc_year": bson.M{"$year": "$timestamp" },
+					"utc_dayOfYMonth": bson.M{"$dayOfMonth": "$timestamp" },
+					"utc_month": bson.M{"$month": "$timestamp" },
+					"utc_hour": bson.M{"$hour": "$timestamp" },
+					"utc_minute": bson.M{"$minute": "$timestamp" },
+				},
+				"cpu": bson.M{
+					"$sum": "$cpu",
+				},
+				"mbytes": bson.M{
+					"$sum": "$mbytes",
+				},
+				"network": bson.M{
+					"$sum": "$network",
+				},
+			},
+		},
+		bson.M{"$sort": bson.M{"_id": 1 } },
+	}
+
+	pipe := c.Pipe(operations)
+	results := []bson.M{}
+	err1 := pipe.All(&results)
+
+	if err1 != nil {
+		fmt.Printf("ERROR : %s\n", err1.Error())
+	}
+
+	for _, item := range results {
+		timestamp := time.Date(
+			item["_id"].(bson.M)["utc_year"].(int),
+			time.Month(item["_id"].(bson.M)["utc_month"].(int)),
+			item["_id"].(bson.M)["utc_dayOfYMonth"].(int),
+			item["_id"].(bson.M)["utc_hour"].(int),
+			item["_id"].(bson.M)["utc_minute"].(int), 0, 0,
+			time.UTC,
+		)
+
+		entry := UtilisationStatistic{
+			Timestamp:timestamp,
+			Mbytes: base.Usage(item["mbytes"].(int64)),
+			Cpu: base.Usage(item["cpu"].(int64)),
+			Network: base.Usage(item["network"].(int64)),
+		}
+		result = append(result, entry)
+	}
+
+	return result
+}
+
+func (a *OrcaDb) Query__AppMetrics_Performance__ByMinute_SingleHost(application base.AppName, host base.HostId) []UtilisationStatistic {
+	c := a.db.C("app_metrics")
+
+	var result = make([]UtilisationStatistic, 0)
+	operations := []bson.M{
+		bson.M{
+			"$match" :bson.M{"appname":application},
+		},
+		bson.M{
+			"$match" :bson.M{"host":host},
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id": bson.M{
+					"utc_year": bson.M{"$year": "$timestamp" },
+					"utc_dayOfYMonth": bson.M{"$dayOfMonth": "$timestamp" },
+					"utc_month": bson.M{"$month": "$timestamp" },
+					"utc_hour": bson.M{"$hour": "$timestamp" },
+					"utc_minute": bson.M{"$minute": "$timestamp" },
+				},
+				"cpu": bson.M{
+					"$sum": "$cpu",
+				},
+				"mbytes": bson.M{
+					"$sum": "$mbytes",
+				},
+				"network": bson.M{
+					"$sum": "$network",
+				},
+			},
+		},
+		bson.M{"$sort": bson.M{"_id": 1 } },
+	}
+
+	pipe := c.Pipe(operations)
+	results := []bson.M{}
+	err1 := pipe.All(&results)
+
+	if err1 != nil {
+		fmt.Printf("ERROR : %s\n", err1.Error())
+	}
+
+	for _, item := range results {
+		timestamp := time.Date(
+			item["_id"].(bson.M)["utc_year"].(int),
+			time.Month(item["_id"].(bson.M)["utc_month"].(int)),
+			item["_id"].(bson.M)["utc_dayOfYMonth"].(int),
+			item["_id"].(bson.M)["utc_hour"].(int),
+			item["_id"].(bson.M)["utc_minute"].(int), 0, 0,
+			time.UTC,
+		)
+
+		entry := UtilisationStatistic{
+			Timestamp:timestamp,
+			Mbytes: base.Usage(item["mbytes"].(int64)),
+			Cpu: base.Usage(item["cpu"].(int64)),
+			Network: base.Usage(item["network"].(int64)),
+		}
+		result = append(result, entry)
+	}
+
+	return result
+}
+

@@ -123,7 +123,7 @@ type TrainerPushWrapper struct {
 }
 
 type AppMetrics map[AppName]map[Version]map[string]AppStats
-type AppMetricsJson map[AppName]map[string]map[string]AppStats
+type AppMetricsJson map[AppName]map[Version]map[string]AppStats
 
 type MetricsWrapper struct {
     HostMetrics map[string]HostStats
@@ -136,7 +136,7 @@ func (m *MetricsWrapper) Wipe() {
     metricsMutex.Lock()
     defer metricsMutex.Unlock()
     (*m).HostMetrics = make(map[string]HostStats)
-    (*m).AppMetrics = make(map[AppName]map[string]map[string]AppStats)
+    (*m).AppMetrics = make(map[AppName]map[Version]map[string]AppStats)
 }
 
 func (m MetricsWrapper) Get() MetricsWrapper{
@@ -155,14 +155,13 @@ func (m MetricsWrapper) AddHostMetrics(hostMetrics HostStats) {
 func (m MetricsWrapper) AddAppMetrics(appName AppName, version Version, appMetrics AppStats) {
     metricsMutex.Lock()
     defer metricsMutex.Unlock()
-    versionStr := strconv.Itoa(int(version))
     if _, exists := m.AppMetrics[appName]; !exists {
-        m.AppMetrics[appName] = make(map[string]map[string]AppStats)
+        m.AppMetrics[appName] = make(map[Version]map[string]AppStats)
     }
-    if _, exists := m.AppMetrics[appName][versionStr]; !exists {
-        m.AppMetrics[appName][versionStr] = make(map[string]AppStats)
+    if _, exists := m.AppMetrics[appName][version]; !exists {
+        m.AppMetrics[appName][version] = make(map[string]AppStats)
     }
-    m.AppMetrics[appName][versionStr][time.Now().UTC().Format(time.RFC3339Nano)] = appMetrics
+    m.AppMetrics[appName][version][time.Now().UTC().Format(time.RFC3339Nano)] = appMetrics
 }
 
 
@@ -188,6 +187,21 @@ type PortMapping struct {
     ContainerPort string
 }
 
+type VolumeMapping struct {
+    HostPath string
+    ContainerPath string
+}
+
+type File struct {
+    HostPath string
+    Base64FileContents string
+}
+
+type EnvironmentVariable struct {
+    Key string
+    Value string
+}
+
 type AppConfiguration struct {
     Name                  AppName
     Type                  AppType
@@ -202,6 +216,9 @@ type AppConfiguration struct {
     Needs AppNeeds
     WeekdayBasedAppNeeds WeekdayBasedAppNeeds
     PortMappings []PortMapping
+    VolumeMappings []VolumeMapping
+    EnvironmentVariables []EnvironmentVariable
+    Files []File
 }
 
 func (a *AppConfiguration) GetNeeds() AppNeeds {
@@ -321,9 +338,9 @@ func (m AppMetrics) ConvertJsonFriendly() AppMetricsJson {
     defer appsMetricsMutex.Unlock()
     res := AppMetricsJson{}
     for appName, obj := range m {
-        res[appName] = make(map[string]map[string]AppStats)
+        res[appName] = make(map[Version]map[string]AppStats)
         for appVersion, appMetrics := range obj {
-            res[appName][strconv.Itoa(int(appVersion))] = appMetrics
+            res[appName][appVersion] = appMetrics
         }
     }
     return res

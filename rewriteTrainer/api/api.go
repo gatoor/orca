@@ -27,13 +27,11 @@ import (
 	"gatoor/orca/rewriteTrainer/state/needs"
 	"gatoor/orca/rewriteTrainer/state/cloud"
 	Logger "gatoor/orca/rewriteTrainer/log"
-	"gatoor/orca/rewriteTrainer/metrics"
 	"gatoor/orca/rewriteTrainer/responder"
 	"gatoor/orca/rewriteTrainer/db"
 	"gatoor/orca/rewriteTrainer/tracker"
 	"gatoor/orca/base"
 	"gatoor/orca/rewriteTrainer/config"
-	"gatoor/orca/rewriteTrainer/audit"
 )
 
 const ORCA_VERSION = "0.1"
@@ -57,6 +55,8 @@ func (api Api) Init() {
 	r.HandleFunc("/state/config/applications", getStateConfigurationApplications)
 	r.HandleFunc("/state/config/cloud", getStateConfigurationCloudProviders)
 	r.HandleFunc("/state/cloud", getStateCloud)
+	r.HandleFunc("/state/cloud/application/performance", getAppPerformance)
+	r.HandleFunc("/state/cloud/application/count", getAppCount)
 	r.HandleFunc("/state/needs", getStateNeeds)
 	r.HandleFunc("/audit", getAuditEvents)
 
@@ -84,39 +84,34 @@ func returnJson(w http.ResponseWriter, obj interface{}) {
 }
 
 func pushHandler(w http.ResponseWriter, r *http.Request) {
-	hostInfo, stats, err := metrics.ParsePush(r)
-	ApiLogger.Infof("Got metrics from host '%s'", hostInfo.HostId)
+	decoder := json.NewDecoder(r.Body)
+
+	var wrapper base.TrainerPushWrapper
+	err := decoder.Decode(&wrapper)
+
+	ApiLogger.Infof("Got metrics from host '%s'", wrapper.HostInfo.HostId)
 	if err != nil {
 		json.NewEncoder(w).Encode(nil)
 		return
 	}
 
-	doHandlePush(hostInfo, stats)
+	/* Update the state and host tracker */
+	state_cloud.GlobalCloudLayout.Current.UpdateHost(wrapper.HostInfo,wrapper.Stats)
+	tracker.GlobalHostTracker.Update(wrapper.HostInfo.HostId)
 
-	config, err := responder.GetConfigForHost(hostInfo.HostId)
+	responder.CheckAppState(wrapper.HostInfo)
+	config, err := responder.GetConfigForHost(wrapper.HostInfo.HostId)
 
 	if err != nil {
-		ApiLogger.Infof("Sending empty response to host '%s'", hostInfo.HostId)
+		ApiLogger.Infof("Sending empty response to host '%s'", wrapper.HostInfo.HostId)
 		config = base.PushConfiguration{}
 		config.OrcaVersion = ORCA_VERSION
 		returnJson(w, config)
 		return
 	}
 	config.OrcaVersion = ORCA_VERSION
-	ApiLogger.Infof("Sending new config to host '%s': '%+v'", hostInfo.HostId, config)
+	ApiLogger.Infof("Sending new config to host '%s': '%+v'", wrapper.HostInfo.HostId, config)
 	returnJson(w, config)
-}
-
-func doHandlePush(hostInfo base.HostInfo, stats base.MetricsWrapper) {
-	timeString, time := db.GetNow()
-
-	metrics.RecordStats(hostInfo.HostId, stats, timeString)
-	metrics.RecordHostInfo(hostInfo, timeString)
-
-	state_cloud.UpdateCurrent(hostInfo, timeString)
-	tracker.GlobalHostTracker.Update(hostInfo.HostId, time)
-
-	responder.CheckAppState(hostInfo)
 }
 
 func getStateConfiguration(w http.ResponseWriter, r *http.Request) {
@@ -173,16 +168,16 @@ func getStateConfigurationApplications(w http.ResponseWriter, r *http.Request) {
 			Version: new_version,
 			TargetDeploymentCount: object.TargetDeploymentCount,
 			MinDeploymentCount: object.MinDeploymentCount,
-			//InstallCommands []base.OsCommand
-			//QueryStateCommand base.OsCommand
-			//RemoveCommand base.OsCommand
-			//RunCommand base.OsCommand
-			//StopCommand base.OsCommand
+
 			DockerConfig: object.DockerConfig,
 			LoadBalancer: object.LoadBalancer,
 			Network: object.Network,
 			Needs: object.Needs,
 			PortMappings: object.PortMappings,
+
+			VolumeMappings: object.VolumeMappings,
+			EnvironmentVariables: object.EnvironmentVariables,
+			Files: object.Files,
 		})
 
 		apiInstance.ConfigManager.Save()
@@ -204,7 +199,25 @@ func getStateNeeds(w http.ResponseWriter, r *http.Request) {
 func getAuditEvents(w http.ResponseWriter, r *http.Request) {
 	ApiLogger.Infof("Query to getAuditEvents")
 
-	returnJson(w, audit.Audit.ListEvents(nil))
+	application := r.URL.Query().Get("application")
+	returnJson(w, db.Audit.Query__AuditEvents(base.AppName(application)))
+}
+
+func getAppPerformance(w http.ResponseWriter, r *http.Request) {
+	ApiLogger.Infof("Query to getAppPerformance")
+	application := r.URL.Query().Get("application")
+	hostid := r.URL.Query().Get("hostid")
+	if hostid == ""{
+		returnJson(w, db.Audit.Query__ApplicationUtilisationStatistic(base.AppName(application)))
+	}else{
+		returnJson(w, db.Audit.Query__AppMetrics_Performance__ByMinute_SingleHost(base.AppName(application), base.HostId(hostid)))
+	}
+}
+
+func getAppCount(w http.ResponseWriter, r *http.Request) {
+	ApiLogger.Infof("Query to getAppCount")
+	application := r.URL.Query().Get("application")
+	returnJson(w, db.Audit.Query__ApplicationCountStatistic(base.AppName(application)))
 }
 
 func doHandleCloudEvent() {

@@ -24,8 +24,8 @@ import (
 	"gatoor/orca/base"
 	"gatoor/orca/client/types"
 	"strconv"
-	"gatoor/orca/rewriteTrainer/audit"
 	"fmt"
+	"gatoor/orca/rewriteTrainer/db"
 )
 
 var InstallerLogger = Logger.LoggerWithField(Logger.Logger, "module", "installer")
@@ -76,19 +76,19 @@ func ubuntu1604(clientConfig types.Configuration) []string {
 }
 
 func InstallNewInstance(clientConfig types.Configuration, ipAddr base.IpAddr, sshKey string, sshUser string) bool {
-	audit.Audit.AddEvent(map[string]string{
+	db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 		"message": fmt.Sprintf("Starting install on host %s:%s", clientConfig.HostId, ipAddr),
 		"subsystem": "cloud.installer",
 		"level": "info",
-	})
+	}})
 
 	session, addr := orcaSSh.Connect(sshUser, string(ipAddr) + ":22", sshKey)
 	if session == nil {
-		audit.Audit.AddEvent(map[string]string{
+		db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 			"message": fmt.Sprintf("Install on host %s:%s failed: No session", clientConfig.HostId, ipAddr),
 			"subsystem": "cloud.installer",
 			"level": "error",
-		})
+		}})
 
 		return false
 	}
@@ -96,20 +96,20 @@ func InstallNewInstance(clientConfig types.Configuration, ipAddr base.IpAddr, ss
 	for _, cmd := range instance {
 		res := orcaSSh.ExecuteSshCommand(session, addr, cmd)
 		if !res {
-			audit.Audit.AddEvent(map[string]string{
+			db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 				"message": fmt.Sprintf("Install on host %s:%s failed", clientConfig.HostId, ipAddr),
 				"subsystem": "cloud.installer",
 				"level": "error",
-			})
+			}})
 
 			return false
 		}
 	}
 
-	audit.Audit.AddEvent(map[string]string{
+	db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 		"message": fmt.Sprintf("Install on host %s:%s success", clientConfig.HostId, ipAddr),
 		"subsystem": "cloud.installer",
 		"level": "info",
-	})
+	}})
 	return true
 }

@@ -30,8 +30,9 @@ import (
 	"gatoor/orca/rewriteTrainer/state/configuration"
 	"gatoor/orca/rewriteTrainer/db"
 	"gatoor/orca/rewriteTrainer/cloud"
-	"gatoor/orca/rewriteTrainer/audit"
+	"gatoor/orca/rewriteTrainer/needs"
 	"sort"
+	"time"
 )
 
 var PlannerLogger = Logger.LoggerWithField(Logger.Logger, "module", "planner")
@@ -268,7 +269,7 @@ func appsDiff(master map[base.AppName]state_cloud.AppsVersion, slave map[base.Ap
 		if _, exists := master[appName]; !exists {
 			if !reflect.DeepEqual(versionElem, master[appName]) {
 				PlannerLogger.Infof("Got app removal for app '%s'", appName)
-				diff[appName] = state_cloud.AppsVersion{versionElem.Version, 0}
+				diff[appName] = state_cloud.AppsVersion{versionElem.Version, 0, base.AppStats{}, time.Time{}}
 			}
 		}
 	}
@@ -477,13 +478,13 @@ func planApp(appObj base.AppConfiguration, hostFinderFunc HostFinderFunc, deploy
 	for deployed <= appObj.TargetDeploymentCount {
 		hostId := hostFinderFunc(ns, appObj.Name, sortedHosts, goodHosts)
 		if hostId == "" {
-			audit.Audit.AddEvent(map[string]string{
+			db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 				"message": fmt.Sprintf("App %s:%d could not find suitable host", appObj.Name, appObj.Version),
 				"subsystem": "planner",
 				"application": string(appObj.Name),
 				"application.version": string(appObj.Version),
 				"level": "warning",
-			})
+			}})
 
 			success = false
 			break
@@ -510,13 +511,13 @@ func planApp(appObj base.AppConfiguration, hostFinderFunc HostFinderFunc, deploy
 			if !ignoreFailures {
 				addFailedAssign(hostId, appObj.Name, appObj.Version, depl)
 			} else {
-				audit.Audit.AddEvent(map[string]string{
+				db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 					"message": fmt.Sprintf("Assign of App %s:%d failed again. Will not try again.", appObj.Name, appObj.Version),
 					"subsystem": "planner",
 					"application": string(appObj.Name),
 					"application.version": string(appObj.Version),
 					"level": "warning",
-				})
+				}})
 			}
 			success = false
 		}
@@ -524,13 +525,13 @@ func planApp(appObj base.AppConfiguration, hostFinderFunc HostFinderFunc, deploy
 	}
 
 	if deployed < appObj.TargetDeploymentCount {
-		audit.Audit.AddEvent(map[string]string{
+		db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 			"message": fmt.Sprintf("App %s:%d could not deploy TargetDeploymentCount %d, only deployed %d", appObj.Name, appObj.Version, appObj.TargetDeploymentCount, deployed),
 			"subsystem": "planner",
 			"application": string(appObj.Name),
 			"application.version": string(appObj.Version),
 			"level": "warning",
-		})
+		}})
 
 		addMissingAssign(appObj.Name, appObj.Version, appObj.Type, appObj.TargetDeploymentCount - deployed)
 		success = false
@@ -670,14 +671,14 @@ func assignAppToHost(hostId base.HostId, app base.AppConfiguration, count base.D
 		NetworkNeeds: base.NetworkNeeds(int(ns.NetworkNeeds) * int(count)),
 	}
 	if !state_cloud.GlobalAvailableInstances.HostHasResourcesForApp(hostId, ns) {
-		audit.Audit.AddEvent(map[string]string{
+		db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 			"message": fmt.Sprintf("App %s:%d on host '%s': Instance resources are insufficient, needed: %+v", app.Name, app.Version, hostId, ns),
 			"subsystem": "planner",
 			"application": string(app.Name),
 			"application.version": string(app.Version),
 			"host": string(hostId),
 			"level": "warning",
-		})
+		}})
 
 		addFailedAssign(hostId, app.Name, app.Version, count)
 		return false
@@ -685,14 +686,14 @@ func assignAppToHost(hostId base.HostId, app base.AppConfiguration, count base.D
 	updateInstanceResources(hostId, deployedNeeds)
 	state_cloud.GlobalCloudLayout.Desired.AddApp(hostId, app.Name, app.Version, count)
 
-	audit.Audit.AddEvent(map[string]string{
+	db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 		"message": fmt.Sprintf("Assign %s:%d to host '%s' %d times successful", app.Name, app.Version, hostId, count),
 		"subsystem": "planner",
 		"application": string(app.Name),
 		"application.version": string(app.Version),
 		"host": string(hostId),
 		"level": "info",
-	})
+	}})
 
 	return true
 }
@@ -706,14 +707,6 @@ func updateInstanceResources(hostId base.HostId, needs base.AppNeeds)  {
 	current.UsedMemoryResource += base.MemoryResource(needs.MemoryNeeds)
 	current.UsedNetworkResource += base.NetworkResource(needs.NetworkNeeds)
 	state_cloud.GlobalAvailableInstances.Update(hostId, current)
-}
-
-
-//TODO
-func SaveDesired() {
-	desired := ""
-	timeString, _ := db.GetNow()
-	db.Audit.Add(db.BUCKET_AUDIT_DESIRED_LAYOUT, timeString, desired)
 }
 
 

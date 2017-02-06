@@ -20,7 +20,6 @@ package cloud
 
 import (
 	"gatoor/orca/base"
-	"gatoor/orca/rewriteTrainer/state/cloud"
 	"strings"
 	"strconv"
 	"gatoor/orca/rewriteTrainer/state/configuration"
@@ -75,20 +74,6 @@ func Init() {
 		CurrentProvider = &TestProvider{ProviderConfiguration: state_configuration.GlobalConfigurationState.CloudProvider}
 	}
 	CurrentProvider.Init()
-
-	spawnToMinInstances()
-	AWSLogger.Infof("Instances: %+v", state_cloud.GlobalAvailableInstances)
-}
-
-func spawnToMinInstances() {
-	if len(state_cloud.GlobalAvailableInstances) < int(state_configuration.GlobalConfigurationState.CloudProvider.MinInstances) {
-		AWSLogger.Infof("Not enough instances available. Spawning more, available:%d min:%d", len(state_cloud.GlobalAvailableInstances), state_configuration.GlobalConfigurationState.CloudProvider.MinInstances)
-		for i := len(state_cloud.GlobalAvailableInstances); i < int(state_configuration.GlobalConfigurationState.CloudProvider.MinInstances); i++ {
-			CurrentProvider.SpawnInstanceSync(state_configuration.GlobalConfigurationState.CloudProvider.BaseInstanceType)
-		}
-	} else {
-		AWSLogger.Infof("Enough instances available, going on")
-	}
 }
 
 

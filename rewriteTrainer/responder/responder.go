@@ -28,8 +28,8 @@ import (
 	"fmt"
 	"gatoor/orca/rewriteTrainer/cloud"
 	"gatoor/orca/rewriteTrainer/state/cloud"
-	"gatoor/orca/rewriteTrainer/audit"
 	"sort"
+	"gatoor/orca/rewriteTrainer/db"
 )
 
 var ResponderLogger = Logger.LoggerWithField(Logger.Logger, "module", "responder")
@@ -153,13 +153,13 @@ func handleEmptyHost(hostInfo base.HostInfo) {
 
 func simpleAppCheck(appObj base.AppInfo, hostId base.HostId) {
 	if appObj.Status != base.STATUS_RUNNING {
-		audit.Audit.AddEvent(map[string]string{
+		db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 			"message": fmt.Sprintf("App %s:%d on host '%s' is not running. Adding it to GlobalAppCrashes", appObj.Name, appObj.Version, hostId),
 			"subsystem": "responder",
 			"application": string(appObj.Name),
 			"host": string(hostId),
 			"level": "error",
-		})
+		}})
 
 		tracker.GlobalAppsStatusTracker.Update(hostId, appObj.Name, appObj.Version, tracker.APP_EVENT_CRASH)
 		cloud.CurrentProvider.UpdateLoadBalancers(hostId, appObj.Name, appObj.Version, base.STATUS_DEAD)
@@ -172,36 +172,36 @@ func simpleAppCheck(appObj base.AppInfo, hostId base.HostId) {
 func checkAppUpdate(appObj base.AppInfo, hostId base.HostId, queuedState planner.AppsUpdateState) {
 	ResponderLogger.Infof("Check update of App %s:%d on host '%s'", appObj.Name, appObj.Version, hostId)
 	if queuedState.State != planner.STATE_APPLYING {
-		audit.Audit.AddEvent(map[string]string{
+		db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 			"message": fmt.Sprintf("Got illegal state %s for update of App %s:%d on host '%s'", queuedState.State, appObj.Name, appObj.Version, hostId),
 			"subsystem": "responder",
 			"application": string(appObj.Name),
 			"host": string(hostId),
 			"level": "error",
-		})
+		}})
 		return
 	}
 	if appObj.Status == base.STATUS_RUNNING {
 		if appObj.Version == queuedState.Version.Version {
-			audit.Audit.AddEvent(map[string]string{
+			db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 				"message": fmt.Sprintf("Update of App %s:%d on host '%s' successful", appObj.Name, appObj.Version, hostId),
 				"subsystem": "responder",
 				"application": string(appObj.Name),
 				"host": string(hostId),
 				"level": "info",
-			})
+			}})
 
 			handleSuccessfulUpdate(hostId, appObj.Name, appObj.Version)
 			cloud.CurrentProvider.UpdateLoadBalancers(hostId, appObj.Name, appObj.Version, base.STATUS_RUNNING)
 
 		} else {
-			audit.Audit.AddEvent(map[string]string{
+			db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 				"message": fmt.Sprintf("Update of App %s:%d on host '%s' rolled back to version %s", appObj.Name, queuedState.Version.Version, hostId, appObj.Version),
 				"subsystem": "responder",
 				"application": string(appObj.Name),
 				"host": string(hostId),
 				"level": "error",
-			})
+			}})
 
 			handleRollback(hostId, appObj.Name, queuedState.Version.Version)
 			cloud.CurrentProvider.UpdateLoadBalancers(hostId, appObj.Name, appObj.Version, base.STATUS_RUNNING)
@@ -209,35 +209,35 @@ func checkAppUpdate(appObj base.AppInfo, hostId base.HostId, queuedState planner
 	}
 	if appObj.Status == base.STATUS_DEPLOYING {
 		if appObj.Version == queuedState.Version.Version {
-			audit.Audit.AddEvent(map[string]string{
+			db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 				"message": fmt.Sprintf("Update of App %s:%d on host '%s' is still applying", appObj.Name, appObj.Version, hostId),
 				"subsystem": "responder",
 				"application": string(appObj.Name),
 				"host": string(hostId),
 				"level": "info",
-			})
+			}})
 
 			return
 		} else {
-			audit.Audit.AddEvent(map[string]string{
+			db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 				"message": fmt.Sprintf("Update of App %s:%d on host '%s' rolling back to version %d", appObj.Name, queuedState.Version, hostId, appObj.Version),
 				"subsystem": "responder",
 				"application": string(appObj.Name),
 				"host": string(hostId),
 				"level": "error",
-			})
+			}})
 
 			handleRollback(hostId, appObj.Name, queuedState.Version.Version)
 		}
 	}
 	if appObj.Status == base.STATUS_DEAD {
-		audit.Audit.AddEvent(map[string]string{
+		db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 			"message": fmt.Sprintf("Update of App %s:%d on host '%s' was fatal for the app, the version that died on the host is %d", appObj.Name, queuedState.Version, hostId, appObj.Version),
 			"subsystem": "responder",
 			"application": string(appObj.Name),
 			"host": string(hostId),
 			"level": "error",
-		})
+		}})
 
 		handleFatalUpdate(hostId, appObj.Name, appObj.Version, queuedState.Version.DeploymentCount)
 		cloud.CurrentProvider.UpdateLoadBalancers(hostId, appObj.Name, appObj.Version, base.STATUS_DEAD)

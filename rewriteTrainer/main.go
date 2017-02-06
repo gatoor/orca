@@ -31,7 +31,6 @@ import (
 	"gatoor/orca/rewriteTrainer/planner"
 	"time"
 	"flag"
-	"gatoor/orca/rewriteTrainer/audit"
 )
 
 
@@ -41,18 +40,22 @@ func main() {
 	var configurationRoot = flag.String("configroot", "/orca/config/", "Configuration Root Directory")
 	flag.Parse()
 
-	audit.Audit.Init()
-	audit.Audit.AddEvent(map[string]string{
+	db.Audit.Init("localhost")
+	db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 		"message": "Orca Trainer Started",
-	})
+	}})
+
 	var baseConfiguration config.JsonConfiguration
 
 	Logger.InitLogger.Info("Starting trainer...")
 	initState()
 	initConfig(&baseConfiguration, *configurationRoot)
 	cloud.Init()
-	db.Init("")
+	db.Audit.Init("")
 	initApi(&baseConfiguration)
+
+	state_cloud.GlobalCloudLayout.InitBaseInstances()
+
 	waitForCheckin()
 	scheduler.Start()
 	planner.InitialPlan()
@@ -81,9 +84,9 @@ func initConfig(baseConfiguration *config.JsonConfiguration, configurationRoot s
 	baseConfiguration.Check()
 	baseConfiguration.ApplyToState()
 
-	audit.Audit.AddEvent(map[string]string{
+	db.Audit.Insert__AuditEvent(db.AuditEvent{Details:map[string]string{
 		"message": "Configuration has been loaded from filesystem",
-	})
+	}})
 }
 
 
