@@ -32,7 +32,6 @@ import (
 	"gatoor/orca/rewriteTrainer/state/needs"
 	"gatoor/orca/rewriteTrainer/cloud"
 	"gatoor/orca/rewriteTrainer/db"
-	"gatoor/orca/rewriteTrainer/needs"
 	"gatoor/orca/rewriteTrainer/planner"
 	"gatoor/orca/rewriteTrainer/scheduler"
 	"gatoor/orca/rewriteTrainer/tracker"
@@ -102,10 +101,10 @@ func initTrainer() {
 		Network: "network2",
 	})
 
-	state_needs.GlobalAppsNeedState.UpdateNeeds("http1", 1, needs.AppNeeds{CpuNeeds: 101, MemoryNeeds: 101, NetworkNeeds: 101})
-	state_needs.GlobalAppsNeedState.UpdateNeeds("http2", 1, needs.AppNeeds{CpuNeeds: 102, MemoryNeeds: 102, NetworkNeeds: 102})
-	state_needs.GlobalAppsNeedState.UpdateNeeds("worker1", 1, needs.AppNeeds{CpuNeeds: 330, MemoryNeeds: 320, NetworkNeeds: 310})
-	state_needs.GlobalAppsNeedState.UpdateNeeds("worker2", 1, needs.AppNeeds{CpuNeeds: 210, MemoryNeeds: 210, NetworkNeeds: 210})
+	state_needs.GlobalAppsNeedState.UpdateNeeds("http1", 1, base.AppNeeds{CpuNeeds: 101, MemoryNeeds: 101, NetworkNeeds: 101})
+	state_needs.GlobalAppsNeedState.UpdateNeeds("http2", 1, base.AppNeeds{CpuNeeds: 102, MemoryNeeds: 102, NetworkNeeds: 102})
+	state_needs.GlobalAppsNeedState.UpdateNeeds("worker1", 1, base.AppNeeds{CpuNeeds: 330, MemoryNeeds: 320, NetworkNeeds: 310})
+	state_needs.GlobalAppsNeedState.UpdateNeeds("worker2", 1, base.AppNeeds{CpuNeeds: 210, MemoryNeeds: 210, NetworkNeeds: 210})
 }
 
 func clientPush(clientObj base.TrainerPushWrapper) *httptest.ResponseRecorder {

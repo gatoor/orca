@@ -80,10 +80,10 @@ func TestConfig_ApplyToState(t *testing.T) {
 			//	Type: base.EXEC_COMMAND,
 			//	Command: base.Command{"rm", "-rf /server/app1"},
 			//},
-			Needs: needs.AppNeeds{
-				MemoryNeeds: needs.MemoryNeeds(5),
-				CpuNeeds: needs.CpuNeeds(5),
-				NetworkNeeds: needs.NetworkNeeds(5),
+			Needs: base.AppNeeds{
+				MemoryNeeds: base.MemoryNeeds(5),
+				CpuNeeds: base.CpuNeeds(5),
+				NetworkNeeds: base.NetworkNeeds(5),
 			},
 		},
 		{
@@ -108,10 +108,10 @@ func TestConfig_ApplyToState(t *testing.T) {
 			//	Type: base.EXEC_COMMAND,
 			//	Command: base.Command{"rm", "-rf /server/app11"},
 			//},
-			Needs: needs.AppNeeds{
-				MemoryNeeds: needs.MemoryNeeds(5),
-				CpuNeeds: needs.CpuNeeds(5),
-				NetworkNeeds: needs.NetworkNeeds(5),
+			Needs: base.AppNeeds{
+				MemoryNeeds: base.MemoryNeeds(5),
+				CpuNeeds: base.CpuNeeds(5),
+				NetworkNeeds: base.NetworkNeeds(5),
 			},
 		},
 		{
@@ -136,10 +136,10 @@ func TestConfig_ApplyToState(t *testing.T) {
 			//	Type: base.EXEC_COMMAND,
 			//	Command: base.Command{"rm", "-rf /server/app2"},
 			//},
-			Needs: needs.AppNeeds{
-				MemoryNeeds: needs.MemoryNeeds(5),
-				CpuNeeds: needs.CpuNeeds(5),
-				NetworkNeeds: needs.NetworkNeeds(5),
+			Needs: base.AppNeeds{
+				MemoryNeeds: base.MemoryNeeds(5),
+				CpuNeeds: base.CpuNeeds(5),
+				NetworkNeeds: base.NetworkNeeds(5),
 			},
 		},
 	}

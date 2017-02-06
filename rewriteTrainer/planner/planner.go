@@ -30,7 +30,6 @@ import (
 	"gatoor/orca/rewriteTrainer/state/configuration"
 	"gatoor/orca/rewriteTrainer/db"
 	"gatoor/orca/rewriteTrainer/cloud"
-	"gatoor/orca/rewriteTrainer/needs"
 	"gatoor/orca/rewriteTrainer/audit"
 	"sort"
 )
@@ -410,6 +409,7 @@ func doPlanInternal() {
 		wg.Add(len(chunk))
 		for _, appName := range chunk {
 			appObj := apps[appName]
+			appObj.TargetDeploymentCount = appObj.GetDeploymentCount()
 			PlannerLogger.Infof("Assigning HttpApp %s:%d. Need to do this %d times", appObj.Name, appObj.Version, appObj.TargetDeploymentCount)
 			go func () {
 				defer wg.Done()
@@ -422,6 +422,7 @@ func doPlanInternal() {
 
 	for _, appName := range workerOrder {
 		appObj := apps[appName]
+		appObj.TargetDeploymentCount = appObj.GetDeploymentCount()
 		PlannerLogger.Infof("Assigning WorkerApp %s:%d. Need to do this %d times", appObj.Name, appObj.Version, appObj.TargetDeploymentCount)
 		planWorker(appObj, findHostWithResources, false)
 
@@ -459,8 +460,8 @@ func assignSurplusResources() {
 
 }
 
-type HostFinderFunc func (ns needs.AppNeeds, app base.AppName, sortedHosts []base.HostId, goodHosts map[base.HostId]bool) base.HostId
-type DeploymentCountFunc func (resources base.InstanceResources, ns needs.AppNeeds) base.DeploymentCount
+type HostFinderFunc func (ns base.AppNeeds, app base.AppName, sortedHosts []base.HostId, goodHosts map[base.HostId]bool) base.HostId
+type DeploymentCountFunc func (resources base.InstanceResources, ns base.AppNeeds) base.DeploymentCount
 
 func planApp(appObj base.AppConfiguration, hostFinderFunc HostFinderFunc, deploymentCountFunc DeploymentCountFunc, ignoreFailures bool) bool {
 	success := true
@@ -542,13 +543,13 @@ func planWorker(appObj base.AppConfiguration, hostFinderFunc HostFinderFunc, ign
 }
 
 func planHttp(appObj base.AppConfiguration, hostFinderFunc HostFinderFunc, ignoreFailures bool) bool {
-	httpDeploymentCountFunc := func(resources base.InstanceResources, needs needs.AppNeeds) base.DeploymentCount {
+	httpDeploymentCountFunc := func(resources base.InstanceResources, needs base.AppNeeds) base.DeploymentCount {
 		return 1
 	}
 	return planApp(appObj, hostFinderFunc, httpDeploymentCountFunc, ignoreFailures)
 }
 
-func maxDeploymentOnHost(resources base.InstanceResources, ns needs.AppNeeds) base.DeploymentCount {
+func maxDeploymentOnHost(resources base.InstanceResources, ns base.AppNeeds) base.DeploymentCount {
 	availCpu := int(resources.TotalCpuResource - resources.UsedCpuResource)
 	availMem := int(resources.TotalMemoryResource - resources.UsedMemoryResource)
 	availNet := int(resources.TotalNetworkResource - resources.UsedNetworkResource)
@@ -571,7 +572,7 @@ func maxDeploymentOnHost(resources base.InstanceResources, ns needs.AppNeeds) ba
 }
 
 
-func findHostWithResources(ns needs.AppNeeds, app base.AppName, sortedHosts []base.HostId, goodHosts map[base.HostId]bool) base.HostId{
+func findHostWithResources(ns base.AppNeeds, app base.AppName, sortedHosts []base.HostId, goodHosts map[base.HostId]bool) base.HostId{
 	var backUpHost base.HostId = ""
 	PlannerLogger.Infof("findHostWithResources for app %s. goodHosts=%+v; sortedHosts=%+v", app, goodHosts, sortedHosts)
 	for host := range goodHosts {
@@ -595,7 +596,7 @@ func findHostWithResources(ns needs.AppNeeds, app base.AppName, sortedHosts []ba
 
 var TotalIter int = 0
 
-func findHttpHostWithResources(ns needs.AppNeeds, app base.AppName, sortedHosts []base.HostId, goodHosts map[base.HostId]bool) base.HostId {
+func findHttpHostWithResources(ns base.AppNeeds, app base.AppName, sortedHosts []base.HostId, goodHosts map[base.HostId]bool) base.HostId {
 	var backUpHost base.HostId = ""
 	PlannerLogger.Infof("findHttpHostWithResources for app %s. goodHosts=%+v; sortedHosts=%+v", app, goodHosts, sortedHosts)
 	for host := range goodHosts {
@@ -663,10 +664,10 @@ func assignAppToHost(hostId base.HostId, app base.AppConfiguration, count base.D
 		addFailedAssign(hostId, app.Name, app.Version, count)
 		return false
 	}
-	deployedNeeds := needs.AppNeeds{
-		CpuNeeds: needs.CpuNeeds(int(ns.CpuNeeds) * int(count)),
-		MemoryNeeds: needs.MemoryNeeds(int(ns.MemoryNeeds) * int(count)),
-		NetworkNeeds: needs.NetworkNeeds(int(ns.NetworkNeeds) * int(count)),
+	deployedNeeds := base.AppNeeds{
+		CpuNeeds: base.CpuNeeds(int(ns.CpuNeeds) * int(count)),
+		MemoryNeeds: base.MemoryNeeds(int(ns.MemoryNeeds) * int(count)),
+		NetworkNeeds: base.NetworkNeeds(int(ns.NetworkNeeds) * int(count)),
 	}
 	if !state_cloud.GlobalAvailableInstances.HostHasResourcesForApp(hostId, ns) {
 		audit.Audit.AddEvent(map[string]string{
@@ -696,7 +697,7 @@ func assignAppToHost(hostId base.HostId, app base.AppConfiguration, count base.D
 	return true
 }
 
-func updateInstanceResources(hostId base.HostId, needs needs.AppNeeds)  {
+func updateInstanceResources(hostId base.HostId, needs base.AppNeeds)  {
 	current, err := state_cloud.GlobalAvailableInstances.GetResources(hostId)
 	if err != nil {
 		return
@@ -731,10 +732,10 @@ func getGlobalResources() (base.CpuResource, base.MemoryResource, base.NetworkRe
 }
 
 
-func getGlobalMinNeeds() (needs.CpuNeeds, needs.MemoryNeeds, needs.NetworkNeeds){
-	var totalCpuNeeds needs.CpuNeeds
-	var totalMemoryNeeds needs.MemoryNeeds
-	var totalNetworkNeeds needs.NetworkNeeds
+func getGlobalMinNeeds() (base.CpuNeeds, base.MemoryNeeds, base.NetworkNeeds){
+	var totalCpuNeeds base.CpuNeeds
+	var totalMemoryNeeds base.MemoryNeeds
+	var totalNetworkNeeds base.NetworkNeeds
 
 	for appName, appObj := range state_configuration.GlobalConfigurationState.Apps {
 		version := appObj.LatestVersion()
@@ -743,23 +744,24 @@ func getGlobalMinNeeds() (needs.CpuNeeds, needs.MemoryNeeds, needs.NetworkNeeds)
 			PlannerLogger.Warnf("Missing needs for app %s:%d", appName, version)
 			continue
 		}
-		cpu := int(appObj[version].TargetDeploymentCount) * int(appNeeds.CpuNeeds)
-		mem := int(appObj[version].TargetDeploymentCount) * int(appNeeds.MemoryNeeds)
-		net := int(appObj[version].TargetDeploymentCount) * int(appNeeds.NetworkNeeds)
+		elem := appObj[version]
+		cpu := int(elem.GetDeploymentCount()) * int(appNeeds.CpuNeeds)
+		mem := int(elem.GetDeploymentCount()) * int(appNeeds.MemoryNeeds)
+		net := int(elem.GetDeploymentCount()) * int(appNeeds.NetworkNeeds)
 		PlannerLogger.Infof("AppMinNeeds for %s:%d: Cpu=%d, Memory=%d, Network=%d", appName, version, cpu, mem, net)
-		totalCpuNeeds += needs.CpuNeeds(cpu)
-		totalMemoryNeeds += needs.MemoryNeeds(mem)
-		totalNetworkNeeds += needs.NetworkNeeds(net)
+		totalCpuNeeds += base.CpuNeeds(cpu)
+		totalMemoryNeeds += base.MemoryNeeds(mem)
+		totalNetworkNeeds += base.NetworkNeeds(net)
 	}
 	PlannerLogger.Infof("GlobalAppMinNeeds: Cpu=%d, Memory=%d, Network=%d", totalCpuNeeds, totalMemoryNeeds, totalNetworkNeeds)
 	return totalCpuNeeds, totalMemoryNeeds, totalNetworkNeeds
 }
 
 
-func getGlobalCurrentNeeds() (needs.CpuNeeds, needs.MemoryNeeds, needs.NetworkNeeds) {
-	var totalCpuNeeds needs.CpuNeeds
-	var totalMemoryNeeds needs.MemoryNeeds
-	var totalNetworkNeeds needs.NetworkNeeds
+func getGlobalCurrentNeeds() (base.CpuNeeds, base.MemoryNeeds, base.NetworkNeeds) {
+	var totalCpuNeeds base.CpuNeeds
+	var totalMemoryNeeds base.MemoryNeeds
+	var totalNetworkNeeds base.NetworkNeeds
 
 	for hostId, hostObj := range state_cloud.GlobalCloudLayout.Current.Layout {
 		for appName, appObj := range hostObj.Apps {
@@ -772,9 +774,9 @@ func getGlobalCurrentNeeds() (needs.CpuNeeds, needs.MemoryNeeds, needs.NetworkNe
 			mem := int(appObj.DeploymentCount) * int(appNeeds.MemoryNeeds)
 			net := int(appObj.DeploymentCount) * int(appNeeds.NetworkNeeds)
 			PlannerLogger.Infof("AppNeeds on host '%s': App %s:%d deployed %d times: Cpu=%d, Memory=%d, Network=%d", hostId, appName, appObj.Version, appObj.DeploymentCount, cpu, mem, net)
-			totalCpuNeeds += needs.CpuNeeds(cpu)
-			totalMemoryNeeds += needs.MemoryNeeds(mem)
-			totalNetworkNeeds += needs.NetworkNeeds(net)
+			totalCpuNeeds += base.CpuNeeds(cpu)
+			totalMemoryNeeds += base.MemoryNeeds(mem)
+			totalNetworkNeeds += base.NetworkNeeds(net)
 		}
 	}
 	PlannerLogger.Infof("GlobalAppCurrentNeeds: Cpu=%d, Memory=%d, Network=%d", totalCpuNeeds, totalMemoryNeeds, totalNetworkNeeds)

@@ -64,10 +64,10 @@ func AwsJsonConfig() config.JsonConfiguration {
 	//		//	Type: base.EXEC_COMMAND,
 	//		//	Command: base.Command{"docker", "stop orca-nginx"},
 	//		//},
-	//		Needs: needs.AppNeeds{
-	//			MemoryNeeds: needs.MemoryNeeds(5),
-	//			CpuNeeds: needs.CpuNeeds(5),
-	//			NetworkNeeds: needs.NetworkNeeds(5),
+	//		Needs: base.AppNeeds{
+	//			MemoryNeeds: base.MemoryNeeds(5),
+	//			CpuNeeds: base.CpuNeeds(5),
+	//			NetworkNeeds: base.NetworkNeeds(5),
 	//		},
 	//	},
 	//	{
@@ -89,10 +89,10 @@ func AwsJsonConfig() config.JsonConfiguration {
 	//		//	Type: base.EXEC_COMMAND,
 	//		//	Command: base.Command{"docker", "stop orca-nginxworker"},
 	//		//},
-	//		Needs: needs.AppNeeds{
-	//			MemoryNeeds: needs.MemoryNeeds(3),
-	//			CpuNeeds: needs.CpuNeeds(3),
-	//			NetworkNeeds: needs.NetworkNeeds(3),
+	//		Needs: base.AppNeeds{
+	//			MemoryNeeds: base.MemoryNeeds(3),
+	//			CpuNeeds: base.CpuNeeds(3),
+	//			NetworkNeeds: base.NetworkNeeds(3),
 	//		},
 	//	},
 	//}

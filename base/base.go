@@ -26,7 +26,6 @@ import (
     "sync"
     "fmt"
     "strconv"
-    "gatoor/orca/rewriteTrainer/needs"
 )
 
 const (
@@ -194,13 +193,29 @@ type AppConfiguration struct {
     Type                  AppType
     Version               Version
     TargetDeploymentCount DeploymentCount
+    WeekdayBasedDeploymentCount WeekdayBasedDeploymentCount
     MinDeploymentCount    DeploymentCount
     DockerConfig          DockerConfig
     RawConfig             RawConfig
     LoadBalancer LoadBalancerName
     Network NetworkName
-    Needs needs.AppNeeds
+    Needs AppNeeds
+    WeekdayBasedAppNeeds WeekdayBasedAppNeeds
     PortMappings []PortMapping
+}
+
+func (a *AppConfiguration) GetNeeds() AppNeeds {
+    if a.WeekdayBasedAppNeeds.IsEmpty() {
+        return a.Needs
+    }
+    return a.WeekdayBasedAppNeeds.Get(timeToWeekdayMinutes(time.Now()))
+}
+
+func (a *AppConfiguration) GetDeploymentCount() DeploymentCount {
+    if a.WeekdayBasedDeploymentCount.isEmpty() {
+        return a.TargetDeploymentCount
+    }
+    return a.WeekdayBasedDeploymentCount.Get(timeToWeekdayMinutes(time.Now()))
 }
 
 type ProviderType string
@@ -344,6 +359,10 @@ func (d DeploymentCount) Max(current MaxAble, max MaxAble) MaxAble {
     return castMax
 }
 
+func (d DeploymentCount) isEmpty() bool {
+    return d == 0
+}
+
 func (an AppNeeds) Max(current MaxAble, max MaxAble) MaxAble {
     if max == nil {
         return current
@@ -364,10 +383,18 @@ func (an AppNeeds) Max(current MaxAble, max MaxAble) MaxAble {
     return castMax
 }
 
+func (an AppNeeds) isEmpty() bool {
+    if an.CpuNeeds != 0 || an.NetworkNeeds != 0 || an.MemoryNeeds != 0 {
+        return false
+    }
+    return true
+}
+
 type Minutes int
 
 type MaxAble interface {
     Max(MaxAble, MaxAble) MaxAble
+    isEmpty() bool
 }
 
 type TimeBased map[Minutes]MaxAble
@@ -376,6 +403,10 @@ type WeekdayBased map[time.Weekday]TimeBased
 
 type WeekdayBasedDeploymentCount struct {
     Based WeekdayBased
+}
+
+func (w WeekdayBasedDeploymentCount) isEmpty() bool {
+    return w.Based.isEmpty()
 }
 
 func (w WeekdayBasedDeploymentCount) Get(day time.Weekday, minutes Minutes) DeploymentCount {
@@ -402,6 +433,10 @@ func (w *WeekdayBasedDeploymentCount) SetFlat(ns DeploymentCount) {
 
 type WeekdayBasedAppNeeds struct {
     Based WeekdayBased
+}
+
+func (w WeekdayBasedAppNeeds) IsEmpty() bool {
+    return w.Based.isEmpty()
 }
 
 func (w WeekdayBasedAppNeeds) Get(day time.Weekday, minutes Minutes) AppNeeds {
@@ -480,6 +515,20 @@ func (w WeekdayBased) setFlat(ns MaxAble) {
             w[time.Weekday(i)][Minutes(m)] = ns
         }
     }
+}
+
+func (w WeekdayBased) isEmpty() bool {
+    if len(w) != 7 {
+        return true
+    }
+    for i := 0; i < 7; i++ {
+        for m := 0; m < (24 * 60); m += MINUTES_DELTA {
+            if !w[time.Weekday(i)][Minutes(m)].isEmpty() {
+                return false
+            }
+        }
+    }
+    return true
 }
 
 //get weekday and minutes in MINUTES_DELTA increments. always rounded down

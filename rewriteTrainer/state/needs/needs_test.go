@@ -33,10 +33,10 @@ func prepareNeedsState() state_needs.AppsNeedState {
 func TestAppsNeedState_GetNeeds(t *testing.T) {
 	ns := prepareNeedsState()
 
-	ns.UpdateNeeds("app1", 1, needs.AppNeeds{
-		CpuNeeds: needs.CpuNeeds(3),
-		MemoryNeeds: needs.MemoryNeeds(10),
-		NetworkNeeds: needs.NetworkNeeds(1),
+	ns.UpdateNeeds("app1", 1, base.AppNeeds{
+		CpuNeeds: base.CpuNeeds(3),
+		MemoryNeeds: base.MemoryNeeds(10),
+		NetworkNeeds: base.NetworkNeeds(1),
 	})
 
 	_, err0 := ns.Get("unknown", 100)
@@ -55,7 +55,7 @@ func TestAppsNeedState_GetNeeds(t *testing.T) {
 		t.Error("got wrong needs value")
 	}
 
-	ns.UpdateNeeds("app1", 2, needs.AppNeeds{})
+	ns.UpdateNeeds("app1", 2, base.AppNeeds{})
 	val2, _ := ns.Get("app1", 2)
 	if val2.CpuNeeds != 3 {
 		t.Error(val2)
@@ -66,15 +66,15 @@ func TestAppsNeedState_GetNeeds(t *testing.T) {
 func TestAppsNeedState_GetAll(t *testing.T) {
 	ns := prepareNeedsState()
 
-	ns.UpdateNeeds("app1", 1, needs.AppNeeds{
-		CpuNeeds: needs.CpuNeeds(1),
-		MemoryNeeds: needs.MemoryNeeds(1),
-		NetworkNeeds: needs.NetworkNeeds(1),
+	ns.UpdateNeeds("app1", 1, base.AppNeeds{
+		CpuNeeds: base.CpuNeeds(1),
+		MemoryNeeds: base.MemoryNeeds(1),
+		NetworkNeeds: base.NetworkNeeds(1),
 	})
-	ns.UpdateNeeds("app1", 2, needs.AppNeeds{
-		CpuNeeds: needs.CpuNeeds(2),
-		MemoryNeeds: needs.MemoryNeeds(2),
-		NetworkNeeds: needs.NetworkNeeds(2),
+	ns.UpdateNeeds("app1", 2, base.AppNeeds{
+		CpuNeeds: base.CpuNeeds(2),
+		MemoryNeeds: base.MemoryNeeds(2),
+		NetworkNeeds: base.NetworkNeeds(2),
 	})
 
 	_, err0 := ns.GetAll("unknown")

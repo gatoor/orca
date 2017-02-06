@@ -25,7 +25,6 @@ import (
 	"gatoor/orca/rewriteTrainer/db"
 	"gatoor/orca/rewriteTrainer/state/needs"
 	"sync"
-	"gatoor/orca/rewriteTrainer/needs"
 	"gatoor/orca/rewriteTrainer/audit"
 	"fmt"
 	"sort"
@@ -207,34 +206,34 @@ func (c *CloudLayout) RemoveApp(host base.HostId, app base.AppName) {
 	}
 }
 
-func (c *CloudLayout) Needs(app base.AppName) needs.AppNeeds {
+func (c *CloudLayout) Needs(app base.AppName) base.AppNeeds {
 	cloudLayoutMutex.Lock()
 	defer cloudLayoutMutex.Unlock()
-	ns := needs.AppNeeds{}
+	ns := base.AppNeeds{}
 	for _, elem := range (*c).Layout {
 		if appObj, exists := elem.Apps[app]; exists {
 			currentNeeds, err := state_needs.GlobalAppsNeedState.Get(app, appObj.Version)
 			if err == nil {
-				ns.CpuNeeds += needs.CpuNeeds(int(appObj.DeploymentCount) * int(currentNeeds.CpuNeeds))
-				ns.MemoryNeeds += needs.MemoryNeeds(int(appObj.DeploymentCount) * int(currentNeeds.MemoryNeeds))
-				ns.NetworkNeeds += needs.NetworkNeeds(int(appObj.DeploymentCount) * int(currentNeeds.NetworkNeeds))
+				ns.CpuNeeds += base.CpuNeeds(int(appObj.DeploymentCount) * int(currentNeeds.CpuNeeds))
+				ns.MemoryNeeds += base.MemoryNeeds(int(appObj.DeploymentCount) * int(currentNeeds.MemoryNeeds))
+				ns.NetworkNeeds += base.NetworkNeeds(int(appObj.DeploymentCount) * int(currentNeeds.NetworkNeeds))
 			}
 		}
 	}
 	return ns
 }
 
-func (c *CloudLayout) AllNeeds() needs.AppNeeds {
+func (c *CloudLayout) AllNeeds() base.AppNeeds {
 	cloudLayoutMutex.Lock()
 	defer cloudLayoutMutex.Unlock()
-	ns := needs.AppNeeds{}
+	ns := base.AppNeeds{}
 	for _, elem := range (*c).Layout {
 		for appName, appObj := range elem.Apps {
 			currentNeeds, err := state_needs.GlobalAppsNeedState.Get(appName, appObj.Version)
 			if err == nil {
-				ns.CpuNeeds += needs.CpuNeeds(int(appObj.DeploymentCount) * int(currentNeeds.CpuNeeds))
-				ns.MemoryNeeds += needs.MemoryNeeds(int(appObj.DeploymentCount) * int(currentNeeds.MemoryNeeds))
-				ns.NetworkNeeds += needs.NetworkNeeds(int(appObj.DeploymentCount) * int(currentNeeds.NetworkNeeds))
+				ns.CpuNeeds += base.CpuNeeds(int(appObj.DeploymentCount) * int(currentNeeds.CpuNeeds))
+				ns.MemoryNeeds += base.MemoryNeeds(int(appObj.DeploymentCount) * int(currentNeeds.MemoryNeeds))
+				ns.NetworkNeeds += base.NetworkNeeds(int(appObj.DeploymentCount) * int(currentNeeds.NetworkNeeds))
 			}
 		}
 	}
@@ -282,7 +281,7 @@ func (c *CloudLayout) UpdateHost(hostInfo base.HostInfo) {
 
 var AvailableInstancesLogger = StateCloudLogger.WithField("type", "AvailableInstances")
 
-func (a *AvailableInstances) HostHasResourcesForApp (hostId base.HostId, ns needs.AppNeeds) bool{
+func (a *AvailableInstances) HostHasResourcesForApp (hostId base.HostId, ns base.AppNeeds) bool{
 	availableInstancesMutex.Lock()
 	res := (*a)[hostId]
 	if int(res.TotalCpuResource - res.UsedCpuResource) >= int(ns.CpuNeeds) &&

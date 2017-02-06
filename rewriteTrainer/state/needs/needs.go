@@ -23,7 +23,6 @@ import (
 	"sync"
 	"errors"
 	Logger "gatoor/orca/rewriteTrainer/log"
-	"gatoor/orca/rewriteTrainer/needs"
 	"sort"
 )
 
@@ -34,7 +33,7 @@ var StateNeedsLogger = Logger.LoggerWithField(Logger.Logger, "module", "state_ne
 type AppsNeedState map[base.AppName]AppNeedVersion
 
 //TODO use WeeklyNeeds here
-type AppNeedVersion map[base.Version]needs.AppNeeds
+type AppNeedVersion map[base.Version]base.AppNeeds
 
 func (a AppsNeedState) GetAll(app base.AppName) (AppNeedVersion, error) {
 	needsStateMutex.Lock()
@@ -49,25 +48,25 @@ func (a AppsNeedState) GetAll(app base.AppName) (AppNeedVersion, error) {
 }
 
 //TODO get them by current time with WeeklyNeeds
-func (a AppsNeedState) Get(app base.AppName, version base.Version) (needs.AppNeeds, error) {
+func (a AppsNeedState) Get(app base.AppName, version base.Version) (base.AppNeeds, error) {
 	needsStateMutex.Lock()
 	defer needsStateMutex.Unlock()
 	if _, exists := a[app]; !exists {
 		StateNeedsLogger.Warnf("App '%s' does not exist", app)
-		return needs.AppNeeds{}, errors.New("No such App")
+		return base.AppNeeds{}, errors.New("No such App")
 	}
 	if _, exists := a[app][version]; !exists {
 		StateNeedsLogger.Warnf("App '%s' does not exist", app)
-		return needs.AppNeeds{}, errors.New("No such Version")
+		return base.AppNeeds{}, errors.New("No such Version")
 	}
 	res := a[app][version]
 	StateNeedsLogger.Debugf("Get for %s:%d: %+v", app, version, res)
 	return res, nil
 }
 
-func (a AppsNeedState) lastValidNeeds(app base.AppName) needs.AppNeeds {
+func (a AppsNeedState) lastValidNeeds(app base.AppName) base.AppNeeds {
 	if _, exists := a[app]; !exists {
-		return needs.AppNeeds{1, 1, 1}
+		return base.AppNeeds{1, 1, 1}
 	}
 	var versions base.Versions
 	for version := range a[app] {
@@ -80,15 +79,15 @@ func (a AppsNeedState) lastValidNeeds(app base.AppName) needs.AppNeeds {
 			return a[app][version]
 		}
 	}
-	return needs.AppNeeds{1, 1, 1}
+	return base.AppNeeds{1, 1, 1}
 }
 
 //TODO use WeeklyNeeds
-func (a AppsNeedState) UpdateNeeds(app base.AppName, version base.Version, ns needs.AppNeeds) {
+func (a AppsNeedState) UpdateNeeds(app base.AppName, version base.Version, ns base.AppNeeds) {
 	needsStateMutex.Lock()
 	defer needsStateMutex.Unlock()
 	if _, exists := a[app]; !exists {
-		a[app] = make(map[base.Version]needs.AppNeeds)
+		a[app] = make(map[base.Version]base.AppNeeds)
 	}
 	if ns.CpuNeeds == 0 || ns.MemoryNeeds == 0 || ns.NetworkNeeds == 0 {
 		ns = a.lastValidNeeds(app)

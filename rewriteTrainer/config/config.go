@@ -143,7 +143,7 @@ func applyCloudProviderConfiguration(conf base.ProviderConfiguration) {
 
 func applyAppsConfig(appsConfs []base.AppConfiguration) {
 	for _, aConf := range appsConfs {
-		state_configuration.GlobalConfigurationState.ConfigureApp(base.AppConfiguration{
+		app := base.AppConfiguration{
 			Name: aConf.Name,
 			Type: aConf.Type,
 			Version: aConf.Version,
@@ -154,13 +154,10 @@ func applyAppsConfig(appsConfs []base.AppConfiguration) {
 			Network: aConf.Network,
 			PortMappings: aConf.PortMappings,
 			Needs: aConf.Needs,
-
-			//InstallCommands: aConf.InstallCommands,
-			//QueryStateCommand: aConf.QueryStateCommand,
-			//RunCommand: aConf.RunCommand,
-			//StopCommand: aConf.StopCommand,
-			//RemoveCommand: aConf.RemoveCommand,
-		})
+		}
+		app.WeekdayBasedDeploymentCount.SetFlat(aConf.TargetDeploymentCount)
+		app.WeekdayBasedAppNeeds.SetFlat(aConf.Needs)
+		state_configuration.GlobalConfigurationState.ConfigureApp(app)
 	}
 }
 

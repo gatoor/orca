@@ -22,7 +22,6 @@ import (
 	"gatoor/orca/rewriteTrainer/state/cloud"
 	"gatoor/orca/rewriteTrainer/config"
 	"gatoor/orca/base"
-	"gatoor/orca/rewriteTrainer/needs"
 )
 
 func ExampleCloudState() {
@@ -57,10 +56,10 @@ func ExampleJsonConfig() config.JsonConfiguration {
 			Type: base.APP_HTTP,
 			MinDeploymentCount: 2,
 			TargetDeploymentCount: 2,
-			Needs: needs.AppNeeds{
-				MemoryNeeds: needs.MemoryNeeds(5),
-				CpuNeeds: needs.CpuNeeds(5),
-				NetworkNeeds: needs.NetworkNeeds(5),
+			Needs: base.AppNeeds{
+				MemoryNeeds: base.MemoryNeeds(5),
+				CpuNeeds: base.CpuNeeds(5),
+				NetworkNeeds: base.NetworkNeeds(5),
 			},
 		},{
 			Name: "app1",
@@ -68,10 +67,10 @@ func ExampleJsonConfig() config.JsonConfiguration {
 			Type: base.APP_WORKER,
 			MinDeploymentCount: 2,
 			TargetDeploymentCount: 2,
-			Needs: needs.AppNeeds{
-				MemoryNeeds: needs.MemoryNeeds(5),
-				CpuNeeds: needs.CpuNeeds(5),
-				NetworkNeeds: needs.NetworkNeeds(5),
+			Needs: base.AppNeeds{
+				MemoryNeeds: base.MemoryNeeds(5),
+				CpuNeeds: base.CpuNeeds(5),
+				NetworkNeeds: base.NetworkNeeds(5),
 			},
 		},
 		{
@@ -80,10 +79,10 @@ func ExampleJsonConfig() config.JsonConfiguration {
 			Type: base.APP_WORKER,
 			MinDeploymentCount: 2,
 			TargetDeploymentCount: 2,
-			Needs: needs.AppNeeds{
-				MemoryNeeds: needs.MemoryNeeds(5),
-				CpuNeeds: needs.CpuNeeds(5),
-				NetworkNeeds: needs.NetworkNeeds(5),
+			Needs: base.AppNeeds{
+				MemoryNeeds: base.MemoryNeeds(5),
+				CpuNeeds: base.CpuNeeds(5),
+				NetworkNeeds: base.NetworkNeeds(5),
 			},
 		},
 		{
@@ -92,10 +91,10 @@ func ExampleJsonConfig() config.JsonConfiguration {
 			Type: base.APP_WORKER,
 			MinDeploymentCount: 2,
 			TargetDeploymentCount: 2,
-			Needs: needs.AppNeeds{
-				MemoryNeeds: needs.MemoryNeeds(5),
-				CpuNeeds: needs.CpuNeeds(5),
-				NetworkNeeds: needs.NetworkNeeds(5),
+			Needs: base.AppNeeds{
+				MemoryNeeds: base.MemoryNeeds(5),
+				CpuNeeds: base.CpuNeeds(5),
+				NetworkNeeds: base.NetworkNeeds(5),
 			},
 		},
 	}
