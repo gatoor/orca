@@ -10,6 +10,7 @@ This is the orca trainer repo. To run the trainer you need to configure some bas
              --awsregion <region>
              --awsbaseami <awsbaseami>
              --awssshkey <awssshkey>
+             --awssshkeypath <keypath>
              --awssgroup <awssgroup>
              --instanceusername ubuntu
              --uri http://localhost:5001
